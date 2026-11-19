@@ -1,1 +1,0 @@
-// 只填 anon/publishable key，绝对不要填 service_role/secret key。\nconst SUPABASE_URL="https://anflgvttiiryimphnkqcn.supabase.co";\nconst SUPABASE_ANON_KEY="PASTE_YOUR_ANON_OR_PUBLISHABLE_KEY_HERE";\nlet supabaseClient=null;if(window.supabase&&!SUPABASE_ANON_KEY.startsWith("PASTE_"))supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
