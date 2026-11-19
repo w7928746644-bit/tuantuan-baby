@@ -1,0 +1,3266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="团团喂养" />
+  <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+  <title>团团宝宝喂养记录</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Supabase JS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', '"SF Pro Text"', '"PingFang SC"', '"Helvetica Neue"', 'sans-serif'],
+          },
+          colors: {
+            ios: {
+              bg: '#F2F2F7',
+              card: '#FFFFFF',
+              darkBg: '#000000',
+              darkCard: '#1C1C1E',
+              darkElevated: '#2C2C2E',
+              blue: '#007AFF',
+              green: '#34C759',
+              orange: '#FF9500',
+              pink: '#FF2D55',
+              purple: '#AF52DE',
+              teal: '#5AC8FA',
+              gray: '#8E8E93',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    :root {
+      --sat: env(safe-area-inset-top, 0px);
+      --sab: env(safe-area-inset-bottom, 0px);
+    }
+    * {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    input, textarea, select {
+      user-select: auto;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC", sans-serif;
+      background-color: #F2F2F7;
+      color: #000000;
+      padding-bottom: calc(84px + var(--sab));
+      overflow-x: hidden;
+    }
+    html.dark body {
+      background-color: #000000;
+      color: #FFFFFF;
+    }
+    .ios-blur {
+      backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+    }
+    .ios-card {
+      border-radius: 20px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+      transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.2s;
+    }
+    html.dark .ios-card {
+      box-shadow: none;
+    }
+    .ios-press:active {
+      transform: scale(0.96);
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    /* Custom Range Slider iOS Style */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 999px;
+      background: #E5E5EA;
+    }
+    html.dark input[type="range"]::-webkit-slider-runnable-track {
+      background: #3A3A3C;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 26px;
+      width: 26px;
+      border-radius: 50%;
+      background: #FFFFFF;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.22), 0 0 1px rgba(0,0,0,0.15);
+      margin-top: -10px;
+    }
+    /* Dynamic Island Toast Animation */
+    @keyframes islandPop {
+      0% { transform: translate(-50%, -120%) scale(0.85); opacity: 0; }
+      70% { transform: translate(-50%, 6px) scale(1.02); opacity: 1; }
+      100% { transform: translate(-50%, 0) scale(1); opacity: 1; }
+    }
+    .island-toast {
+      animation: islandPop 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+    /* Pulse dot for active timer / realtime */
+    @keyframes softPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.45; transform: scale(0.88); }
+    }
+    .pulse-dot {
+      animation: softPulse 1.6s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="antialiased selection:bg-blue-500 selection:text-white">
+
+  <!-- iOS Dynamic Island Notification Banner -->
+  <div id="islandToast" class="fixed top-3 left-1/2 -translate-x-1/2 z-[100] hidden max-w-[92vw]">
+    <div class="bg-black/95 dark:bg-[#2C2C2E]/95 text-white px-4 py-2.5 rounded-full shadow-2xl border border-white/10 flex items-center gap-2.5 text-sm font-medium backdrop-blur-xl">
+      <span id="islandIcon" class="text-base">🍼</span>
+      <span id="islandText" class="truncate">已保存记录</span>
+    </div>
+  </div>
+
+  <!-- Top Sticky Navigation Header (iOS Large Title + Frosted Bar) -->
+  <header class="sticky top-0 z-40 ios-blur bg-[#F2F2F7]/85 dark:bg-black/80 border-b border-black/[0.06] dark:border-white/[0.08]" style="padding-top: var(--sat);">
+    <div class="max-w-xl mx-auto px-4 pt-2.5 pb-3">
+      <!-- Top Action Strip -->
+      <div class="flex items-center justify-between gap-2 mb-1.5">
+        <!-- Role Switcher Pill -->
+        <button onclick="cycleRole()" class="ios-press flex items-center gap-1.5 bg-white dark:bg-[#1C1C1E] px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm border border-black/[0.04] dark:border-white/[0.08]">
+          <span id="currentRoleEmoji">👩</span>
+          <span id="currentRoleName">妈妈</span>
+          <span class="text-[10px] text-gray-400 ml-0.5">切换</span>
+        </button>
+
+        <!-- Right Controls: Sync Status + Dark Mode + Backup/Sync Modal -->
+        <div class="flex items-center gap-2">
+          <button onclick="openModal('syncModal')" class="ios-press flex items-center gap-1.5 bg-white dark:bg-[#1C1C1E] px-2.5 py-1.5 rounded-full text-xs font-medium shadow-sm border border-black/[0.04] dark:border-white/[0.08]">
+            <span id="syncDot" class="w-2 h-2 rounded-full bg-amber-400"></span>
+            <span id="syncLabel" class="text-gray-600 dark:text-gray-300">本地/连接中</span>
+          </button>
+
+          <button onclick="toggleDarkMode()" aria-label="切换深色模式" class="ios-press w-8 h-8 rounded-full bg-white dark:bg-[#1C1C1E] flex items-center justify-center shadow-sm border border-black/[0.04] dark:border-white/[0.08] text-sm">
+            <span id="darkModeIcon">🌙</span>
+          </button>
+
+          <button onclick="openModal('backupModal')" aria-label="备份与设置" class="ios-press w-8 h-8 rounded-full bg-white dark:bg-[#1C1C1E] flex items-center justify-center shadow-sm border border-black/[0.04] dark:border-white/[0.08] text-sm">
+            ⚙️
+          </button>
+        </div>
+      </div>
+
+      <!-- Large Title & Date Selector -->
+      <div class="flex items-end justify-between gap-2 mt-1">
+        <div>
+          <h1 class="text-[26px] font-bold tracking-tight leading-tight">团团宝宝喂养记录</h1>
+          <p id="headerSubtitle" class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">每天自动归档 · 科学守护成长</p>
+        </div>
+
+        <!-- Date Navigation Capsule (Shown primarily on Record tab) -->
+        <div id="dateNavCapsule" class="flex items-center bg-white dark:bg-[#1C1C1E] rounded-full p-1 shadow-sm border border-black/[0.04] dark:border-white/[0.08]">
+          <button onclick="changeDate(-1)" class="ios-press w-7 h-7 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 text-xs font-bold">◀</button>
+          <button onclick="goToday()" id="selectedDateLabel" class="px-2.5 text-xs font-semibold text-[#007AFF] whitespace-nowrap">今天</button>
+          <button onclick="changeDate(1)" id="nextDateBtn" class="ios-press w-7 h-7 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 text-xs font-bold">▶</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="max-w-xl mx-auto px-4 pt-3 space-y-4">
+
+    <!-- ==================== TAB 1: 记录 (RECORD) ==================== -->
+    <section id="tab-record" class="space-y-4">
+
+      <!-- Time Since Last Feed Banner -->
+      <div class="ios-card bg-gradient-to-r from-[#007AFF] to-[#5856D6] text-white p-4 relative overflow-hidden">
+        <div class="flex items-center justify-between relative z-10">
+          <div>
+            <div class="flex items-center gap-1.5 text-xs font-medium text-white/85">
+              <span>⏱️ 距离上一顿喂奶</span>
+              <span id="lastFeedTypeBadge" class="bg-white/20 px-2 py-0.5 rounded-full text-[11px]">暂无记录</span>
+            </div>
+            <div id="timeSinceLastFeed" class="text-2xl font-bold tracking-tight mt-1">-- 小时 -- 分</div>
+            <div id="lastFeedExactTime" class="text-xs text-white/80 mt-0.5">点击下方开始记录团团的第一顿吧</div>
+          </div>
+          <div class="text-right">
+            <div class="text-[11px] text-white/80">下次预计喂奶</div>
+            <div id="nextFeedTargetTime" class="text-lg font-bold mt-0.5">--:--</div>
+            <button onclick="switchTab('reminder')" class="mt-1 text-[11px] bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded-full font-medium transition">
+              设置提醒 ›
+            </button>
+          </div>
+        </div>
+        <div class="absolute -right-6 -bottom-8 w-28 h-28 rounded-full bg-white/10 pointer-events-none"></div>
+      </div>
+
+      <!-- Daily Archive Summary Card -->
+      <div class="ios-card bg-white dark:bg-[#1C1C1E] p-4">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">📅 <span id="summaryDateTitle">今日</span>汇总归档</span>
+          <span id="summaryTotalCount" class="text-xs font-medium text-gray-400">共 0 条记录</span>
+        </div>
+        <div class="grid grid-cols-4 gap-2 text-center">
+          <div class="bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-2xl p-2.5">
+            <div class="text-[11px] text-gray-500 dark:text-gray-400">母乳总计</div>
+            <div class="text-base font-bold text-[#FF2D55] mt-0.5"><span id="sumBreastMin">0</span><span class="text-xs font-normal ml-0.5">分</span></div>
+          </div>
+          <div class="bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-2xl p-2.5">
+            <div class="text-[11px] text-gray-500 dark:text-gray-400">奶粉总计</div>
+            <div class="text-base font-bold text-[#007AFF] mt-0.5"><span id="sumFormulaMl">0</span><span class="text-xs font-normal ml-0.5">ml</span></div>
+          </div>
+          <div class="bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-2xl p-2.5">
+            <div class="text-[11px] text-gray-500 dark:text-gray-400">💧 小便</div>
+            <div class="text-base font-bold text-[#34C759] mt-0.5"><span id="sumPeeCount">0</span><span class="text-xs font-normal ml-0.5">次</span></div>
+          </div>
+          <div class="bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-2xl p-2.5">
+            <div class="text-[11px] text-gray-500 dark:text-gray-400">💩 大便</div>
+            <div class="text-base font-bold text-[#FF9500] mt-0.5"><span id="sumPoopCount">0</span><span class="text-xs font-normal ml-0.5">次</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feeding Action Card (Segmented: Breastfeeding L/R vs Formula ml) -->
+      <div class="ios-card bg-white dark:bg-[#1C1C1E] p-4">
+        <!-- iOS Segmented Control -->
+        <div class="bg-[#F2F2F7] dark:bg-[#2C2C2E] p-1 rounded-xl grid grid-cols-2 mb-4">
+          <button id="segBreastBtn" onclick="setFeedMode('breast')" class="py-1.5 rounded-lg text-sm font-semibold bg-white dark:bg-[#3A3A3C] shadow-sm transition">
+            🤱 母乳亲喂 (左/右)
+          </button>
+          <button id="segFormulaBtn" onclick="setFeedMode('formula')" class="py-1.5 rounded-lg text-sm font-semibold text-gray-500 dark:text-gray-400 transition">
+            🍼 配方奶粉 (ml)
+          </button>
+        </div>
+
+        <!-- Custom Time Picker Row (Shared for Feeding) -->
+        <div class="flex items-center justify-between bg-[#F2F2F7]/70 dark:bg-[#2C2C2E]/70 px-3 py-2 rounded-xl mb-3 text-xs">
+          <span class="text-gray-600 dark:text-gray-300 font-medium">🕒 喂奶时间</span>
+          <div class="flex items-center gap-2">
+            <input type="time" id="feedTimeInput" class="bg-transparent font-bold text-sm text-[#007AFF] focus:outline-none" />
+            <button onclick="resetFeedTimeToNow()" class="text-[11px] bg-white dark:bg-[#3A3A3C] px-2 py-0.5 rounded-md text-gray-600 dark:text-gray-300 shadow-sm">此刻</button>
+          </div>
+        </div>
+
+        <!-- MODE A: Breastfeeding Left & Right -->
+        <div id="breastPanel" class="space-y-3">
+          <div class="grid grid-cols-2 gap-3">
+            <!-- Left Breast -->
+            <div class="bg-[#FFF0F3] dark:bg-[#2C1A20] border border-[#FF2D55]/20 rounded-2xl p-3 text-center">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-bold text-[#FF2D55]">左侧 (L)</span>
+                <span id="leftTimerStatus" class="text-[10px] text-gray-400">待计时</span>
+              </div>
+              <div id="leftTimerDisplay" class="text-2xl font-mono font-bold text-gray-900 dark:text-white my-1">00:00</div>
+              <button id="leftTimerBtn" onclick="toggleBreastTimer('left')" class="ios-press w-full py-1.5 rounded-xl bg-[#FF2D55] text-white text-xs font-semibold shadow-sm mb-2">
+                ▶ 开始左乳计时
+              </button>
+              <div class="flex items-center justify-between bg-white/80 dark:bg-black/30 rounded-xl px-2 py-1">
+                <button onclick="adjustBreastMin('left', -1)" class="w-6 h-6 rounded-lg font-bold text-[#FF2D55]">-</button>
+                <span class="text-xs font-bold"><span id="leftMinVal">0</span> 分钟</span>
+                <button onclick="adjustBreastMin('left', 1)" class="w-6 h-6 rounded-lg font-bold text-[#FF2D55]">+</button>
+              </div>
+            </div>
+
+            <!-- Right Breast -->
+            <div class="bg-[#F3F0FF] dark:bg-[#211A2E] border border-[#AF52DE]/20 rounded-2xl p-3 text-center">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-bold text-[#AF52DE]">右侧 (R)</span>
+                <span id="rightTimerStatus" class="text-[10px] text-gray-400">待计时</span>
+              </div>
+              <div id="rightTimerDisplay" class="text-2xl font-mono font-bold text-gray-900 dark:text-white my-1">00:00</div>
+              <button id="rightTimerBtn" onclick="toggleBreastTimer('right')" class="ios-press w-full py-1.5 rounded-xl bg-[#AF52DE] text-white text-xs font-semibold shadow-sm mb-2">
+                ▶ 开始右乳计时
+              </button>
+              <div class="flex items-center justify-between bg-white/80 dark:bg-black/30 rounded-xl px-2 py-1">
+                <button onclick="adjustBreastMin('right', -1)" class="w-6 h-6 rounded-lg font-bold text-[#AF52DE]">-</button>
+                <span class="text-xs font-bold"><span id="rightMinVal">0</span> 分钟</span>
+                <button onclick="adjustBreastMin('right', 1)" class="w-6 h-6 rounded-lg font-bold text-[#AF52DE]">+</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Minute Presets -->
+          <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 px-1">
+            <span>快捷填入：</span>
+            <div class="flex gap-1.5">
+              <button onclick="setQuickBreast(10, 0)" class="px-2 py-1 rounded-lg bg-[#F2F2F7] dark:bg-[#2C2C2E] hover:opacity-80">左10分</button>
+              <button onclick="setQuickBreast(0, 10)" class="px-2 py-1 rounded-lg bg-[#F2F2F7] dark:bg-[#2C2C2E] hover:opacity-80">右10分</button>
+              <button onclick="setQuickBreast(10, 10)" class="px-2 py-1 rounded-lg bg-[#F2F2F7] dark:bg-[#2C2C2E] hover:opacity-80">双侧各10分</button>
+              <button onclick="setQuickBreast(15, 15)" class="px-2 py-1 rounded-lg bg-[#F2F2F7] dark:bg-[#2C2C2E] hover:opacity-80">各15分</button>
+            </div>
+          </div>
+
+          <button onclick="saveBreastRecord()" class="ios-press w-full py-3 rounded-2xl bg-gradient-to-r from-[#FF2D55] to-[#AF52DE] text-white font-semibold text-sm shadow-md">
+            保存母乳记录 (<span id="totalBreastPreview">左 0 分 · 右 0 分</span>)
+          </button>
+        </div>
+
+        <!-- MODE B: Formula Milk (ml) -->
+        <div id="formulaPanel" class="hidden space-y-3">
+          <div class="bg-[#F0F7FF] dark:bg-[#172334] rounded-2xl p-4 text-center">
+            <div class="text-xs text-gray-500 dark:text-gray-400">本次奶粉奶量</div>
+            <div class="flex items-center justify-center gap-4 my-2">
+              <button onclick="adjustFormulaMl(-5)" class="ios-press w-10 h-10 rounded-full bg-white dark:bg-[#2C2C2E] text-[#007AFF] font-bold text-xl shadow-sm">-5</button>
+              <div class="text-4xl font-bold text-[#007AFF] tracking-tight">
+                <span id="formulaMlDisplay">90</span><span class="text-base font-semibold ml-1">ml</span>
+              </div>
+              <button onclick="adjustFormulaMl(5)" class="ios-press w-10 h-10 rounded-full bg-white dark:bg-[#2C2C2E] text-[#007AFF] font-bold text-xl shadow-sm">+5</button>
+            </div>
+            <input type="range" id="formulaSlider" min="10" max="300" step="5" value="90" oninput="setFormulaMl(this.value)" class="w-full my-2" />
+            <!-- Quick ml Chips -->
+            <div class="grid grid-cols-6 gap-1.5 mt-2">
+              <button onclick="setFormulaMl(30)" class="py-1.5 rounded-xl bg-white dark:bg-[#2C2C2E] text-xs font-semibold shadow-sm">30</button>
+              <button onclick="setFormulaMl(60)" class="py-1.5 rounded-xl bg-white dark:bg-[#2C2C2E] text-xs font-semibold shadow-sm">60</button>
+              <button onclick="setFormulaMl(90)" class="py-1.5 rounded-xl bg-white dark:bg-[#2C2C2E] text-xs font-semibold shadow-sm">90</button>
+              <button onclick="setFormulaMl(120)" class="py-1.5 rounded-xl bg-white dark:bg-[#2C2C2E] text-xs font-semibold shadow-sm">120</button>
+              <button onclick="setFormulaMl(150)" class="py-1.5 rounded-xl bg-white dark:bg-[#2C2C2E] text-xs font-semibold shadow-sm">150</button>
+              <button onclick="setFormulaMl(180)" class="py-1.5 rounded-xl bg-white dark:bg-[#2C2C2E] text-xs font-semibold shadow-sm">180</button>
+            </div>
+          </div>
+
+          <button onclick="saveFormulaRecord()" class="ios-press w-full py-3 rounded-2xl bg-[#007AFF] text-white font-semibold text-sm shadow-md">
+            保存奶粉记录 (<span id="formulaBtnPreview">90</span> ml)
+          </button>
+        </div>
+      </div>
+
+      <!-- Excretion & User-Editable Quick Action Buttons -->
+      <div class="ios-card bg-white dark:bg-[#1C1C1E] p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h2 class="text-sm font-bold">💧 排泄与日常快捷记录</h2>
+            <p id="customBtnSyncHint" class="text-[11px] text-gray-400">点击即记 · 爸爸妈妈自定义按钮自动同步</p>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="openGrowthModal()" class="ios-press text-xs font-semibold text-[#34C759] bg-[#34C759]/12 px-3 py-1.5 rounded-full">
+              📏 身高体重
+            </button>
+            <button onclick="openModal('editButtonsModal')" class="ios-press text-xs font-semibold text-[#007AFF] bg-[#007AFF]/10 px-3 py-1.5 rounded-full">
+              ✏️ 编辑
+            </button>
+          </div>
+        </div>
+
+        <!-- Dynamic Quick Buttons Grid -->
+        <div id="quickButtonsGrid" class="grid grid-cols-3 gap-2.5">
+          <!-- Rendered by JS -->
+        </div>
+
+        <!-- Latest Growth Snapshot Strip on Home -->
+        <div onclick="switchTab('stats', 'growth')" class="ios-press mt-3 pt-3 border-t border-black/[0.05] dark:border-white/[0.06] flex items-center justify-between cursor-pointer">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-9 h-9 rounded-xl bg-teal-500/12 text-teal-600 dark:text-teal-300 flex items-center justify-center text-base shrink-0">📏</div>
+            <div class="min-w-0">
+              <div class="text-xs font-bold flex items-center gap-1.5">
+                <span>团团生长发育档案</span>
+                <span id="homeBabyAgeBadge" class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[#F2F2F7] dark:bg-[#2C2C2E] text-gray-500">点击查看曲线</span>
+              </div>
+              <div id="homeLatestGrowthText" class="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                暂未记录身高体重 · 点击右侧快速录入
+              </div>
+            </div>
+          </div>
+          <span class="text-xs font-semibold text-[#007AFF] shrink-0 ml-2">曲线 ›</span>
+        </div>
+      </div>
+
+      <!-- Daily Timeline Archive List -->
+      <div class="ios-card bg-white dark:bg-[#1C1C1E] p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-bold">📋 <span id="timelineTitle">今日</span>详细时间轴</h2>
+          <span class="text-[11px] text-gray-400">点击右侧 ✕ 可删除记录</span>
+        </div>
+
+        <div id="timelineList" class="space-y-2.5">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: 统计与生长曲线 (STATS & GROWTH) ==================== -->
+    <section id="tab-stats" class="hidden space-y-4">
+      <!-- iOS Top Segmented Control: 7-Day Feeding vs Growth Curve -->
+      <div class="bg-white dark:bg-[#1C1C1E] p-1 rounded-2xl grid grid-cols-2 shadow-sm border border-black/[0.04] dark:border-white/[0.06]">
+        <button id="statsSubFeedBtn" onclick="setStatsSubTab('feeding')" class="py-2 rounded-xl text-xs font-bold bg-[#007AFF] text-white shadow-sm transition">
+          🍼 近7天喂养排泄
+        </button>
+        <button id="statsSubGrowthBtn" onclick="setStatsSubTab('growth')" class="py-2 rounded-xl text-xs font-bold text-gray-500 dark:text-gray-400 transition">
+          📏 身高体重生长曲线
+        </button>
+      </div>
+
+      <!-- SUB-VIEW A: 7-DAY FEEDING & EXCRETION -->
+      <div id="statsFeedingSubView" class="space-y-4">
+        <!-- 7-Day Averages Overview -->
+        <div class="ios-card bg-white dark:bg-[#1C1C1E] p-4">
+          <h2 class="text-sm font-bold mb-3">📈 最近 7 天日均关键指标</h2>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-2xl p-3">
+              <div class="text-xs text-gray-500 dark:text-gray-400">日均奶粉奶量</div>
+              <div class="text-xl font-bold text-[#007AFF] mt-1"><span id="avg7Formula">0</span> <span class="text-xs font-normal">ml/天</span></div>
+            </div>
+            <div class="bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-2xl p-3">
+              <div class="text-xs text-gray-500 dark:text-gray-400">日均母乳亲喂</div>
+              <div class="text-xl font-bold text-[#FF2D55] mt-1"><span id="avg7Breast">0</span> <span class="text-xs font-normal">分钟/天</span></div>
+            </div>
+            <div class="bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-2xl p-3">
+              <div class="text-xs text-gray-500 dark:text-gray-400">日均小便次数</div>
+              <div class="text-xl font-bold text-[#34C759] mt-1"><span id="avg7Pee">0</span> <span class="text-xs font-normal">次/天</span></div>
+            </div>
+            <div class="bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-2xl p-3">
+              <div class="text-xs text-gray-500 dark:text-gray-400">日均大便次数</div>
+              <div class="text-xl font-bold text-[#FF9500] mt-1"><span id="avg7Poop">0</span> <span class="text-xs font-normal">次/天</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chart 1: 7-Day Feeding Curve -->
+        <div class="ios-card bg-white dark:bg-[#1C1C1E] p-4">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-bold">🍼 近 7 天喂养曲线（奶粉 ml / 母乳分钟）</h3>
+          </div>
+          <div class="relative h-60 w-full">
+            <canvas id="feedingChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Chart 2: 7-Day Pee & Poop Curve -->
+        <div class="ios-card bg-white dark:bg-[#1C1C1E] p-4">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-bold">💧 近 7 天大小便次数曲线</h3>
+          </div>
+          <div class="relative h-56 w-full">
+            <canvas id="excretionChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- SUB-VIEW B: BABY HEIGHT & WEIGHT GROWTH CURVE -->
+      <div id="statsGrowthSubView" class="hidden space-y-4">
+        <!-- Baby Profile & Quick Action Header Card -->
+        <div class="ios-card bg-white dark:bg-[#1C1C1E] p-4 space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <h2 class="text-base font-bold">📏 团团生长指标汇总</h2>
+              <div class="flex items-center gap-2 mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                <span>出生日期：</span>
+                <input type="date" id="babyBirthdayInput" onchange="saveBabyBirthday(this.value)" class="bg-[#F2F2F7] dark:bg-[#2C2C2E] px-2 py-0.5 rounded-lg text-xs font-semibold text-[#007AFF] focus:outline-none" />
+                <span id="growthAgeTag" class="text-[11px] font-semibold text-teal-600 dark:text-teal-300"></span>
+              </div>
+            </div>
+            <button onclick="openGrowthModal()" class="ios-press shrink-0 px-3.5 py-2 rounded-full bg-[#34C759] text-white text-xs font-bold shadow-sm">
+              + 记录身高体重
+            </button>
+          </div>
+
+          <!-- Latest Metrics Cards with Delta Comparison -->
+          <div class="grid grid-cols-3 gap-2.5 pt-1">
+            <div class="bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-2xl p-3">
+              <div class="text-[11px] text-gray-500 dark:text-gray-400">最新体重</div>
+              <div class="text-lg font-bold text-[#007AFF] mt-0.5"><span id="latestWeightVal">--</span><span class="text-xs font-normal ml-0.5">kg</span></div>
+              <div id="latestWeightDiff" class="text-[10px] font-semibold text-gray-400 mt-0.5">暂无对比</div>
+            </div>
+            <div class="bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-2xl p-3">
+              <div class="text-[11px] text-gray-500 dark:text-gray-400">最新身高</div>
+              <div class="text-lg font-bold text-[#34C759] mt-0.5"><span id="latestHeightVal">--</span><span class="text-xs font-normal ml-0.5">cm</span></div>
+              <div id="latestHeightDiff" class="text-[10px] font-semibold text-gray-400 mt-0.5">暂无对比</div>
+            </div>
+            <div class="bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-2xl p-3">
+              <div class="text-[11px] text-gray-500 dark:text-gray-400">最新头围</div>
+              <div class="text-lg font-bold text-[#AF52DE] mt-0.5"><span id="latestHeadVal">--</span><span class="text-xs font-normal ml-0.5">cm</span></div>
+              <div id="latestHeadDiff" class="text-[10px] font-semibold text-gray-400 mt-0.5">可选指标</div>
+            </div>
+          </div>
+
+          <!-- WHO Reference Hint Banner -->
+          <div id="whoRefBanner" class="p-2.5 rounded-xl bg-teal-50 dark:bg-teal-950/30 border border-teal-200/60 dark:border-teal-800/40 text-[11px] text-teal-800 dark:text-teal-200 leading-relaxed">
+            💡 设置宝宝出生日期后，将自动匹配同月龄 WHO 身高体重标准参考区间。
+          </div>
+        </div>
+
+        <!-- Growth Curve Chart Card -->
+        <div class="ios-card bg-white dark:bg-[#1C1C1E] p-4 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <!-- Metric Switcher -->
+            <div class="flex bg-[#F2F2F7] dark:bg-[#2C2C2E] p-0.5 rounded-xl text-xs font-semibold">
+              <button onclick="setGrowthChartMetric('both')" id="gMetricBoth" class="px-2.5 py-1 rounded-lg bg-white dark:bg-[#3A3A3C] shadow-sm">体重+身高</button>
+              <button onclick="setGrowthChartMetric('weight')" id="gMetricWeight" class="px-2.5 py-1 rounded-lg text-gray-500">体重(kg)</button>
+              <button onclick="setGrowthChartMetric('height')" id="gMetricHeight" class="px-2.5 py-1 rounded-lg text-gray-500">身高(cm)</button>
+              <button onclick="setGrowthChartMetric('head')" id="gMetricHead" class="px-2.5 py-1 rounded-lg text-gray-500">头围</button>
+            </div>
+
+            <!-- Time Range Filter -->
+            <select id="growthRangeSelect" onchange="renderGrowthChart()" class="bg-[#F2F2F7] dark:bg-[#2C2C2E] text-xs font-semibold px-2.5 py-1 rounded-xl focus:outline-none">
+              <option value="all">全部记录</option>
+              <option value="90">近 3 个月</option>
+              <option value="180">近 6 个月</option>
+              <option value="365">近 1 年</option>
+            </select>
+          </div>
+
+          <div class="relative h-64 w-full">
+            <canvas id="growthCurveChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Historical Growth Records List -->
+        <div class="ios-card bg-white dark:bg-[#1C1C1E] p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold">📋 历史身高体重测量档案</h3>
+            <span id="growthTotalCount" class="text-[11px] text-gray-400">共 0 次测量</span>
+          </div>
+          <div id="growthRecordsList" class="space-y-2.5">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: 提醒 (REMINDERS & PUSH) ==================== -->
+    <section id="tab-reminder" class="hidden space-y-4">
+      <!-- Permission & iPhone PWA Guide Card -->
+      <div class="ios-card bg-white dark:bg-[#1C1C1E] p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h2 class="text-sm font-bold">🔔 手机通知推送状态</h2>
+            <p id="notifPermDesc" class="text-xs text-gray-500 dark:text-gray-400 mt-1">开启后，到点将推送系统通知并伴有柔和提示音。</p>
+          </div>
+          <button onclick="requestNotificationPermission()" id="notifPermBtn" class="ios-press shrink-0 px-3.5 py-2 rounded-full bg-[#007AFF] text-white text-xs font-semibold shadow-sm">
+            开启通知
+          </button>
+        </div>
+        <div class="mt-3 p-3 rounded-xl bg-[#F2F2F7] dark:bg-[#2C2C2E] text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">
+          📱 <strong>iPhone 推送小贴士：</strong>在 Safari 底部点击 <strong>分享按钮 (□↑)</strong> → 选择 <strong>“添加到主屏幕”</strong>，从桌面图标打开后即可获得完整 iOS 通知提醒体验！
+        </div>
+      </div>
+
+      <!-- Smart Feeding Interval Reminder -->
+      <div class="ios-card bg-white dark:bg-[#1C1C1E] p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold">⏱️ 喂奶间隔智能提醒</h3>
+            <p class="text-xs text-gray-400">自动根据上一顿喂奶时间推算下次提醒</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="intervalReminderToggle" onchange="saveIntervalSetting()" class="sr-only peer" />
+            <div class="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#34C759]"></div>
+          </label>
+        </div>
+
+        <div class="grid grid-cols-4 gap-2 pt-1">
+          <button onclick="setFeedIntervalHours(2.5)" data-interval="2.5" class="interval-chip py-2 rounded-xl text-xs font-semibold bg-[#F2F2F7] dark:bg-[#2C2C2E]">2.5 小时</button>
+          <button onclick="setFeedIntervalHours(3)" data-interval="3" class="interval-chip py-2 rounded-xl text-xs font-semibold bg-[#F2F2F7] dark:bg-[#2C2C2E]">3.0 小时</button>
+          <button onclick="setFeedIntervalHours(3.5)" data-interval="3.5" class="interval-chip py-2 rounded-xl text-xs font-semibold bg-[#F2F2F7] dark:bg-[#2C2C2E]">3.5 小时</button>
+          <button onclick="setFeedIntervalHours(4)" data-interval="4" class="interval-chip py-2 rounded-xl text-xs font-semibold bg-[#F2F2F7] dark:bg-[#2C2C2E]">4.0 小时</button>
+        </div>
+
+        <div class="flex items-center justify-between text-xs pt-1 border-t border-black/[0.05] dark:border-white/[0.06]">
+          <span class="text-gray-500">当前间隔：<strong id="currentIntervalLabel" class="text-[#007AFF]">3.0 小时</strong></span>
+          <button onclick="triggerTestNotification()" class="text-[#007AFF] font-semibold">测试推送一条 🔔</button>
+        </div>
+      </div>
+
+      <!-- Custom Daily Alarms -->
+      <div class="ios-card bg-white dark:bg-[#1C1C1E] p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold">⏰ 自定义定时闹钟提醒</h3>
+            <p class="text-xs text-gray-400">如补充维生素 D3、拍嗝、洗澡、测体温</p>
+          </div>
+          <button onclick="openModal('addAlarmModal')" class="ios-press px-3 py-1.5 rounded-full bg-[#007AFF] text-white text-xs font-semibold">
+            + 添加提醒
+          </button>
+        </div>
+
+        <div id="alarmList" class="space-y-2.5">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 4: 参考 (FEEDING GUIDE) ==================== -->
+    <section id="tab-guide" class="hidden space-y-4">
+      <div class="ios-card bg-white dark:bg-[#1C1C1E] p-4">
+        <h2 class="text-base font-bold mb-1">📚 宝宝科学喂养参考指南</h2>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">数据参考中国营养学会及儿科指南，每个宝宝存在个体差异，按需喂养为主。</p>
+
+        <!-- Month Age Selector Pills -->
+        <div class="flex gap-2 overflow-x-auto no-scrollbar pb-2" id="ageStageTabs">
+          <button onclick="selectAgeStage(0)" class="age-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#007AFF] text-white">0~1 月新生儿</button>
+          <button onclick="selectAgeStage(1)" class="age-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#F2F2F7] dark:bg-[#2C2C2E]">1~3 月龄</button>
+          <button onclick="selectAgeStage(2)" class="age-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#F2F2F7] dark:bg-[#2C2C2E]">3~6 月龄</button>
+          <button onclick="selectAgeStage(3)" class="age-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#F2F2F7] dark:bg-[#2C2C2E]">6~9 月龄</button>
+          <button onclick="selectAgeStage(4)" class="age-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#F2F2F7] dark:bg-[#2C2C2E]">9~12 月龄</button>
+        </div>
+
+        <!-- Stage Details Card -->
+        <div id="ageStageContent" class="mt-3 space-y-3">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+
+      <!-- Stool & Urine Health Reference -->
+      <div class="ios-card bg-white dark:bg-[#1C1C1E] p-4 space-y-2.5">
+        <h3 class="text-sm font-bold">💩 大小便健康信号辨识</h3>
+        <div class="space-y-2 text-xs">
+          <div class="p-3 rounded-xl bg-[#F2F2F7] dark:bg-[#2C2C2E]">
+            <div class="font-bold text-[#34C759]">✅ 正常金黄色 / 糊状便</div>
+            <p class="text-gray-600 dark:text-gray-300 mt-0.5">母乳宝宝多呈金黄色软膏状，每天 1~6 次均属正常；奶粉宝宝多呈淡黄色成形软便。</p>
+          </div>
+          <div class="p-3 rounded-xl bg-[#F2F2F7] dark:bg-[#2C2C2E]">
+            <div class="font-bold text-[#FF9500]">⚠️ 绿色便 / 奶瓣便</div>
+            <p class="text-gray-600 dark:text-gray-300 mt-0.5">常见于前奶摄入过多、腹部轻微受凉或铁元素未完全吸收，注意腹部保暖与拍嗝即可。</p>
+          </div>
+          <div class="p-3 rounded-xl bg-[#F2F2F7] dark:bg-[#2C2C2E]">
+            <div class="font-bold text-[#007AFF]">💧 奶量充足的尿量标准</div>
+            <p class="text-gray-600 dark:text-gray-300 mt-0.5">出生 1 周后，每天湿透 6 片以上尿不湿，且尿液清亮或微黄，说明宝宝奶量摄入充足。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== BOTTOM iOS TAB BAR ==================== -->
+  <nav class="fixed bottom-0 inset-x-0 z-40 ios-blur bg-white/85 dark:bg-[#1C1C1E]/85 border-t border-black/[0.08] dark:border-white/[0.08]" style="padding-bottom: var(--sab);">
+    <div class="max-w-xl mx-auto grid grid-cols-4 h-14">
+      <button onclick="switchTab('record')" id="nav-record" class="nav-btn flex flex-col items-center justify-center text-[#007AFF]">
+        <span class="text-xl leading-none">🍼</span>
+        <span class="text-[10px] font-semibold mt-1">记录</span>
+      </button>
+      <button onclick="switchTab('stats')" id="nav-stats" class="nav-btn flex flex-col items-center justify-center text-gray-400">
+        <span class="text-xl leading-none">📈</span>
+        <span class="text-[10px] font-semibold mt-1">统计</span>
+      </button>
+      <button onclick="switchTab('reminder')" id="nav-reminder" class="nav-btn flex flex-col items-center justify-center text-gray-400 relative">
+        <span class="text-xl leading-none">⏰</span>
+        <span class="text-[10px] font-semibold mt-1">提醒</span>
+      </button>
+      <button onclick="switchTab('guide')" id="nav-guide" class="nav-btn flex flex-col items-center justify-center text-gray-400">
+        <span class="text-xl leading-none">📚</span>
+        <span class="text-[10px] font-semibold mt-1">参考</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ==================== MODALS ==================== -->
+
+  <!-- 1. Poop Detail Modal (Color / Texture) -->
+  <div id="poopModal" class="fixed inset-0 z-50 hidden bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+    <div class="bg-white dark:bg-[#1C1C1E] w-full max-w-md rounded-3xl p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold">💩 记录大便详情</h3>
+        <button onclick="closeModal('poopModal')" class="w-7 h-7 rounded-full bg-gray-100 dark:bg-[#2C2C2E] text-gray-500 text-sm">✕</button>
+      </div>
+      <div>
+        <div class="text-xs text-gray-500 mb-2">选择颜色/性状（点击即保存）</div>
+        <div class="grid grid-cols-2 gap-2.5">
+          <button onclick="confirmPoopRecord('金黄正常')" class="ios-press p-3 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-300/40 text-left">
+            <div class="font-bold text-sm text-amber-700 dark:text-amber-300">🟡 金黄糊状</div>
+            <div class="text-[11px] text-gray-500">健康理想状态</div>
+          </button>
+          <button onclick="confirmPoopRecord('偏绿软便')" class="ios-press p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-300/40 text-left">
+            <div class="font-bold text-sm text-emerald-700 dark:text-emerald-300">🟢 偏绿软便</div>
+            <div class="text-[11px] text-gray-500">注意腹部保暖</div>
+          </button>
+          <button onclick="confirmPoopRecord('含奶瓣')" class="ios-press p-3 rounded-2xl bg-orange-50 dark:bg-orange-900/20 border border-orange-300/40 text-left">
+            <div class="font-bold text-sm text-orange-700 dark:text-orange-300">⚪ 含白色奶瓣</div>
+            <div class="text-[11px] text-gray-500">消化吸收中</div>
+          </button>
+          <button onclick="confirmPoopRecord('偏稀/水样')" class="ios-press p-3 rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-300/40 text-left">
+            <div class="font-bold text-sm text-rose-700 dark:text-rose-300">💧 偏稀/次数多</div>
+            <div class="text-[11px] text-gray-500">留意精神与补水</div>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Edit Custom Quick Buttons Modal -->
+  <div id="editButtonsModal" class="fixed inset-0 z-50 hidden bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+    <div class="bg-white dark:bg-[#1C1C1E] w-full max-w-md rounded-3xl p-5 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-bold">✏️ 编辑快捷记录按钮</h3>
+          <p id="modalButtonSyncMeta" class="text-[11px] text-gray-400 mt-0.5">修改后自动同步至家庭共享端</p>
+        </div>
+        <button onclick="closeModal('editButtonsModal')" class="w-7 h-7 rounded-full bg-gray-100 dark:bg-[#2C2C2E] text-gray-500 text-sm">✕</button>
+      </div>
+
+      <!-- Existing Buttons List -->
+      <div id="editableButtonList" class="space-y-2"></div>
+
+      <!-- Add New Button Form -->
+      <div class="pt-3 border-t border-black/[0.06] dark:border-white/[0.08] space-y-2.5">
+        <div class="text-xs font-bold text-gray-500">➕ 添加新的快捷按钮</div>
+        <div class="flex gap-2">
+          <input type="text" id="newBtnEmoji" value="🫧" maxlength="4" placeholder="图标" class="w-14 text-center text-xl bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-xl py-2" />
+          <input type="text" id="newBtnLabel" placeholder="按钮名称（如：拍嗝、吃D3）" class="flex-1 bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-xl px-3 py-2 text-sm focus:outline-none" />
+        </div>
+        <div class="flex items-center justify-between">
+          <div class="flex gap-2" id="colorPickerRow">
+            <button type="button" data-color="green" onclick="selectNewBtnColor('green', this)" class="w-6 h-6 rounded-full bg-[#34C759] ring-2 ring-offset-2 ring-[#34C759]"></button>
+            <button type="button" data-color="orange" onclick="selectNewBtnColor('orange', this)" class="w-6 h-6 rounded-full bg-[#FF9500]"></button>
+            <button type="button" data-color="blue" onclick="selectNewBtnColor('blue', this)" class="w-6 h-6 rounded-full bg-[#007AFF]"></button>
+            <button type="button" data-color="purple" onclick="selectNewBtnColor('purple', this)" class="w-6 h-6 rounded-full bg-[#AF52DE]"></button>
+            <button type="button" data-color="pink" onclick="selectNewBtnColor('pink', this)" class="w-6 h-6 rounded-full bg-[#FF2D55]"></button>
+          </div>
+          <button onclick="addCustomQuickButton()" class="ios-press px-4 py-2 rounded-xl bg-[#007AFF] text-white text-xs font-semibold">
+            确认添加并同步
+          </button>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between pt-2 border-t border-black/[0.06] dark:border-white/[0.08]">
+        <button onclick="syncCustomButtonsNow(true)" class="ios-press px-3 py-2 rounded-xl bg-[#34C759]/15 text-[#34C759] text-xs font-bold">
+          🔄 立即同步按钮
+        </button>
+        <button onclick="checkCloudButtonSyncStatus()" class="ios-press px-3 py-2 rounded-xl bg-[#007AFF]/12 text-[#007AFF] text-xs font-bold">
+          🩺 检测云端同步状态
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Add Custom Alarm Modal -->
+  <div id="addAlarmModal" class="fixed inset-0 z-50 hidden bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+    <div class="bg-white dark:bg-[#1C1C1E] w-full max-w-md rounded-3xl p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold">⏰ 添加定时提醒</h3>
+        <button onclick="closeModal('addAlarmModal')" class="w-7 h-7 rounded-full bg-gray-100 dark:bg-[#2C2C2E] text-gray-500 text-sm">✕</button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs text-gray-500 block mb-1">提醒时间</label>
+          <input type="time" id="alarmTimeInput" value="09:00" class="w-full bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-xl px-3 py-2.5 text-lg font-bold text-[#007AFF]" />
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 block mb-1">提醒事项名称</label>
+          <input type="text" id="alarmTitleInput" placeholder="例如：补充维生素 D3 / 准备洗澡" class="w-full bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-xl px-3 py-2.5 text-sm" />
+        </div>
+        <button onclick="saveNewAlarm()" class="ios-press w-full py-3 rounded-2xl bg-[#007AFF] text-white font-semibold text-sm">
+          保存提醒
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Supabase Family Sync Modal -->
+  <div id="syncModal" class="fixed inset-0 z-50 hidden bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+    <div class="bg-white dark:bg-[#1C1C1E] w-full max-w-md rounded-3xl p-5 space-y-4 shadow-2xl max-h-[88vh] overflow-y-auto">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold">👨‍👩‍👧 爸爸妈妈云端实时同步</h3>
+        <button onclick="closeModal('syncModal')" class="w-7 h-7 rounded-full bg-gray-100 dark:bg-[#2C2C2E] text-gray-500 text-sm">✕</button>
+      </div>
+
+      <div class="p-3 rounded-2xl bg-[#F2F2F7] dark:bg-[#2C2C2E] text-xs space-y-1.5">
+        <div class="flex items-center justify-between">
+          <span class="text-gray-500">节点地址：</span>
+          <span class="font-mono text-[11px] text-[#007AFF]">anflgvttiirymphnkqcg.supabase.co</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-gray-500">同步状态：</span>
+          <span id="modalSyncStatus" class="font-semibold">检测中...</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-gray-500">自定义按钮同步：</span>
+          <span id="modalButtonSyncStatus" class="font-semibold text-[#007AFF]">待检测</span>
+        </div>
+      </div>
+
+      <div class="flex gap-2">
+        <button onclick="syncCustomButtonsNow(true)" class="ios-press flex-1 py-2.5 rounded-xl bg-[#34C759] text-white text-xs font-bold shadow-sm">
+          🔄 立即同步自定义按钮
+        </button>
+        <button onclick="checkCloudButtonSyncStatus()" class="ios-press flex-1 py-2.5 rounded-xl bg-[#007AFF] text-white text-xs font-bold shadow-sm">
+          🩺 检测云端按钮同步状态
+        </button>
+      </div>
+
+      <div class="space-y-2.5">
+        <div>
+          <label class="text-xs font-semibold text-gray-500 block mb-1">家庭共享空间码（爸爸妈妈填相同即可同步）</label>
+          <div class="flex gap-2">
+            <input type="text" id="familyCodeInput" class="flex-1 bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-xl px-3 py-2 text-sm font-mono font-bold" />
+            <button onclick="updateFamilyCode()" class="ios-press px-3.5 py-2 rounded-xl bg-[#007AFF] text-white text-xs font-semibold">应用并同步</button>
+          </div>
+        </div>
+
+        <div>
+          <label class="text-xs font-semibold text-gray-500 block mb-1">我的身份称呼</label>
+          <div class="grid grid-cols-4 gap-2">
+            <button onclick="setRole('👩', '妈妈')" class="py-2 rounded-xl bg-[#F2F2F7] dark:bg-[#2C2C2E] text-xs font-semibold">👩 妈妈</button>
+            <button onclick="setRole('👨', '爸爸')" class="py-2 rounded-xl bg-[#F2F2F7] dark:bg-[#2C2C2E] text-xs font-semibold">👨 爸爸</button>
+            <button onclick="setRole('👵', '奶奶')" class="py-2 rounded-xl bg-[#F2F2F7] dark:bg-[#2C2C2E] text-xs font-semibold">👵 奶奶</button>
+            <button onclick="setRole('🧓', '外婆')" class="py-2 rounded-xl bg-[#F2F2F7] dark:bg-[#2C2C2E] text-xs font-semibold">🧓 外婆</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- One-click SQL setup helper in case table isn't created yet -->
+      <div id="sqlHelperBox" class="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-300/40 space-y-2">
+        <div class="text-xs font-bold text-amber-800 dark:text-amber-300">💡 首次开启多端云同步说明（含喂养 + 生长曲线 + 自定义按钮表）</div>
+        <p class="text-[11px] text-amber-700 dark:text-amber-200/80 leading-relaxed">
+          当前应用已内置您的 Supabase 密钥，本地随时可用。如需爸爸妈妈多部手机实时同步喂养、身高体重及自定义快捷按钮，请在 Supabase 控制台的 <strong>SQL Editor</strong> 中运行下方建表脚本：
+        </p>
+        <pre id="supabaseSqlCode" class="text-[10px] font-mono bg-black/85 text-green-300 p-2.5 rounded-xl overflow-x-auto select-all">create table if not exists public.feeding_records (
+  id text primary key,
+  family_code text not null default 'tuantuan-family-01',
+  record_date text not null,
+  record_time text not null,
+  timestamp bigint not null,
+  category text not null,
+  title text not null,
+  detail text,
+  left_min int default 0,
+  right_min int default 0,
+  formula_ml int default 0,
+  recorder text default '妈妈',
+  created_at timestamptz default now()
+);
+create table if not exists public.growth_logs (
+  id text primary key,
+  family_code text not null default 'tuantuan-family-01',
+  measure_date text not null,
+  timestamp bigint not null,
+  weight_kg numeric(5,2),
+  height_cm numeric(5,1),
+  head_cm numeric(4,1),
+  note text,
+  recorder text default '妈妈',
+  created_at timestamptz default now()
+);
+create table if not exists public.family_button_configs (
+  family_code text primary key,
+  custom_buttons jsonb not null default '[]'::jsonb,
+  updated_at bigint not null default 0,
+  updated_by text default '妈妈',
+  updated_iso timestamptz default now()
+);
+alter table public.feeding_records enable row level security;
+alter table public.growth_logs enable row level security;
+alter table public.family_button_configs enable row level security;
+create policy "Allow public access feeding" on public.feeding_records for all using (true) with check (true);
+create policy "Allow public access growth" on public.growth_logs for all using (true) with check (true);
+create policy "Allow public access button configs" on public.family_button_configs for all using (true) with check (true);
+alter publication supabase_realtime add table public.feeding_records;
+alter publication supabase_realtime add table public.growth_logs;
+alter publication supabase_realtime add table public.family_button_configs;</pre>
+        <div class="flex gap-2">
+          <button onclick="copySqlScript()" class="ios-press flex-1 py-2 rounded-xl bg-amber-500 text-white text-xs font-semibold">📋 一键复制 SQL 脚本</button>
+          <button onclick="forceCloudPull()" class="ios-press px-3 py-2 rounded-xl bg-white dark:bg-[#2C2C2E] text-xs font-semibold">🔄 立即同步</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Backup & Restore Modal -->
+  <div id="backupModal" class="fixed inset-0 z-50 hidden bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+    <div class="bg-white dark:bg-[#1C1C1E] w-full max-w-md rounded-3xl p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold">📤 数据备份 / 恢复 / 导出</h3>
+        <button onclick="closeModal('backupModal')" class="w-7 h-7 rounded-full bg-gray-100 dark:bg-[#2C2C2E] text-gray-500 text-sm">✕</button>
+      </div>
+      <p class="text-xs text-gray-500 dark:text-gray-400">所有喂养记录、生长档案与自定义快捷按钮均已自动保存在本机并支持云同步，可随时导出备份或恢复。</p>
+
+      <div class="space-y-2.5">
+        <button onclick="exportJSON()" class="ios-press w-full py-3 px-4 rounded-2xl bg-[#007AFF] text-white text-sm font-semibold flex items-center justify-between">
+          <span>💾 导出 JSON 完整备份文件</span>
+          <span class="text-xs opacity-80">推荐</span>
+        </button>
+
+        <button onclick="exportCSV()" class="ios-press w-full py-3 px-4 rounded-2xl bg-[#34C759] text-white text-sm font-semibold flex items-center justify-between">
+          <span>📊 导出 CSV 表格（Excel 可打开）</span>
+          <span class="text-xs opacity-80">汇总报表</span>
+        </button>
+
+        <label class="ios-press w-full py-3 px-4 rounded-2xl bg-[#F2F2F7] dark:bg-[#2C2C2E] text-sm font-semibold flex items-center justify-between cursor-pointer">
+          <span>📥 从 JSON 备份文件恢复数据</span>
+          <span class="text-xs text-[#007AFF]">选择文件</span>
+          <input type="file" accept=".json" onchange="importJSON(event)" class="hidden" />
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. Record / Edit Baby Growth (Height / Weight / Head) Modal -->
+  <div id="growthModal" class="fixed inset-0 z-50 hidden bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+    <div class="bg-white dark:bg-[#1C1C1E] w-full max-w-md rounded-3xl p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between">
+        <h3 id="growthModalTitle" class="text-base font-bold">📏 记录宝宝身高体重</h3>
+        <button onclick="closeModal('growthModal')" class="w-7 h-7 rounded-full bg-gray-100 dark:bg-[#2C2C2E] text-gray-500 text-sm">✕</button>
+      </div>
+
+      <input type="hidden" id="editingGrowthId" value="" />
+
+      <div class="space-y-3">
+        <!-- Measurement Date -->
+        <div class="flex items-center justify-between bg-[#F2F2F7] dark:bg-[#2C2C2E] px-3.5 py-2.5 rounded-2xl">
+          <span class="text-xs font-semibold text-gray-600 dark:text-gray-300">📅 测量日期</span>
+          <input type="date" id="growthDateInput" class="bg-transparent text-sm font-bold text-[#007AFF] focus:outline-none" />
+        </div>
+
+        <!-- Weight Input with Step Controls -->
+        <div class="bg-[#F0F7FF] dark:bg-[#172334] p-3.5 rounded-2xl">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-xs font-bold text-[#007AFF]">⚖️ 体重 (kg，保留两位小数)</span>
+            <span class="text-[11px] text-gray-400">可留空仅记身高</span>
+          </div>
+          <div class="flex items-center justify-between gap-2">
+            <button type="button" onclick="stepGrowthInput('growthWeightInput', -0.05, 2)" class="ios-press w-11 h-10 rounded-xl bg-white dark:bg-[#2C2C2E] text-[#007AFF] font-bold text-sm shadow-sm">-0.05</button>
+            <input type="number" step="0.01" min="0.5" max="40" id="growthWeightInput" placeholder="例如 6.50" class="flex-1 text-center text-2xl font-bold text-[#007AFF] bg-white/80 dark:bg-black/30 rounded-xl py-1.5 focus:outline-none" />
+            <button type="button" onclick="stepGrowthInput('growthWeightInput', 0.05, 2)" class="ios-press w-11 h-10 rounded-xl bg-white dark:bg-[#2C2C2E] text-[#007AFF] font-bold text-sm shadow-sm">+0.05</button>
+          </div>
+        </div>
+
+        <!-- Height Input with Step Controls -->
+        <div class="bg-[#F0FDF4] dark:bg-[#14291E] p-3.5 rounded-2xl">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-xs font-bold text-[#34C759]">📐 身高 / 身长 (cm，保留一位小数)</span>
+            <span class="text-[11px] text-gray-400">可留空仅记体重</span>
+          </div>
+          <div class="flex items-center justify-between gap-2">
+            <button type="button" onclick="stepGrowthInput('growthHeightInput', -0.5, 1)" class="ios-press w-11 h-10 rounded-xl bg-white dark:bg-[#2C2C2E] text-[#34C759] font-bold text-sm shadow-sm">-0.5</button>
+            <input type="number" step="0.1" min="30" max="150" id="growthHeightInput" placeholder="例如 62.5" class="flex-1 text-center text-2xl font-bold text-[#34C759] bg-white/80 dark:bg-black/30 rounded-xl py-1.5 focus:outline-none" />
+            <button type="button" onclick="stepGrowthInput('growthHeightInput', 0.5, 1)" class="ios-press w-11 h-10 rounded-xl bg-white dark:bg-[#2C2C2E] text-[#34C759] font-bold text-sm shadow-sm">+0.5</button>
+          </div>
+        </div>
+
+        <!-- Head Circumference (Optional) -->
+        <div class="flex items-center justify-between bg-[#F2F2F7] dark:bg-[#2C2C2E] px-3.5 py-2.5 rounded-2xl">
+          <span class="text-xs font-semibold text-gray-600 dark:text-gray-300">🧢 头围 (cm，可选)</span>
+          <input type="number" step="0.1" min="20" max="65" id="growthHeadInput" placeholder="例如 40.2" class="w-28 text-right bg-transparent text-sm font-bold text-[#AF52DE] focus:outline-none" />
+        </div>
+
+        <!-- Note & Quick Chips -->
+        <div class="space-y-1.5">
+          <input type="text" id="growthNoteInput" placeholder="备注（如：满月体检、百天纪念、打疫苗测量）" class="w-full bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-2xl px-3.5 py-2.5 text-sm focus:outline-none" />
+          <div class="flex flex-wrap gap-1.5">
+            <button type="button" onclick="setGrowthNote('出生记录')" class="px-2.5 py-1 rounded-lg bg-[#F2F2F7] dark:bg-[#2C2C2E] text-[11px] text-gray-600 dark:text-gray-300">出生记录</button>
+            <button type="button" onclick="setGrowthNote('满月体检')" class="px-2.5 py-1 rounded-lg bg-[#F2F2F7] dark:bg-[#2C2C2E] text-[11px] text-gray-600 dark:text-gray-300">满月体检</button>
+            <button type="button" onclick="setGrowthNote('百天纪念')" class="px-2.5 py-1 rounded-lg bg-[#F2F2F7] dark:bg-[#2C2C2E] text-[11px] text-gray-600 dark:text-gray-300">百天纪念</button>
+            <button type="button" onclick="setGrowthNote('半岁体检')" class="px-2.5 py-1 rounded-lg bg-[#F2F2F7] dark:bg-[#2C2C2E] text-[11px] text-gray-600 dark:text-gray-300">半岁体检</button>
+            <button type="button" onclick="setGrowthNote('社区儿保')" class="px-2.5 py-1 rounded-lg bg-[#F2F2F7] dark:bg-[#2C2C2E] text-[11px] text-gray-600 dark:text-gray-300">社区儿保</button>
+          </div>
+        </div>
+
+        <button onclick="saveGrowthRecord()" class="ios-press w-full py-3 rounded-2xl bg-gradient-to-r from-[#007AFF] to-[#34C759] text-white font-bold text-sm shadow-md">
+          保存生长记录
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==================== 1. SUPABASE CONFIGURATION ====================
+    // Normalize JWT case in case the first character was capitalized ('EyJ...' -> 'eyJ...')
+    const SUPABASE_URL = 'https://anflgvttiirymphnkqcg.supabase.co';
+    const RAW_ANON_KEY = 'EyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFuZmxndnR0aWlyeW1waG5rcWNnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ5MDg3NDYsImV4cCI6MjExMDQ4NDc0Nn0.8_GMkXmXMIxeGvRqfTgLNrBl2bqntD0T20FMj0DjCiA';
+    const RAW_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFuZmxndnR0aWlyeW1waG5rcWNnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5NDkwODc0NiwiZXhwIjoyMTEwNDg0NzQ2fQ.86rNpWJL7FdXF6yNt27MgUBCyKrk3gF4z9t1ltxX3v8';
+    const SUPABASE_ANON_KEY = RAW_ANON_KEY.startsWith('EyJ') ? 'e' + RAW_ANON_KEY.slice(1) : RAW_ANON_KEY;
+    const SUPABASE_SERVICE_KEY = RAW_SERVICE_KEY.startsWith('EyJ') ? 'e' + RAW_SERVICE_KEY.slice(1) : RAW_SERVICE_KEY;
+
+    let supabaseClient = null;
+    let serviceSupabaseClient = null;
+    let cloudAvailable = false;
+    let buttonConfigTableReady = false;
+    let realtimeChannel = null;
+    let pollTimerId = null;
+
+    // ==================== 2. APP STATE & STORAGE KEYS ====================
+    const STORAGE_KEYS = {
+      RECORDS: 'tuantuan_records_v1',
+      GROWTH: 'tuantuan_growth_v1',
+      BUTTONS: 'tuantuan_quick_buttons_v1',
+      CUSTOM_BUTTONS_META: 'tuantuan_custom_buttons_meta_v1',
+      ALARMS: 'tuantuan_alarms_v1',
+      SETTINGS: 'tuantuan_settings_v1',
+    };
+
+    const DEFAULT_QUICK_BUTTONS = [
+      { id: 'btn_pee', emoji: '💧', label: '小便', category: 'pee', color: 'green', isSystem: true, updatedAt: 0 },
+      { id: 'btn_poop', emoji: '💩', label: '大便', category: 'poop', color: 'orange', isSystem: true, updatedAt: 0 },
+      { id: 'btn_diaper', emoji: '🧻', label: '换尿不湿', category: 'diaper', color: 'blue', isSystem: true, updatedAt: 0 },
+    ];
+
+    // WHO 0~12 Month Reference Table
+    const WHO_GROWTH_REF = [
+      { month: 0, weightRange: '2.5 ~ 4.3 kg', heightRange: '46.1 ~ 53.7 cm', wMed: 3.3, hMed: 49.9 },
+      { month: 1, weightRange: '3.4 ~ 5.7 kg', heightRange: '50.8 ~ 58.6 cm', wMed: 4.5, hMed: 54.7 },
+      { month: 2, weightRange: '4.3 ~ 7.0 kg', heightRange: '54.4 ~ 62.4 cm', wMed: 5.6, hMed: 58.4 },
+      { month: 3, weightRange: '5.0 ~ 7.9 kg', heightRange: '57.3 ~ 65.5 cm', wMed: 6.4, hMed: 61.4 },
+      { month: 4, weightRange: '5.6 ~ 8.6 kg', heightRange: '59.7 ~ 68.0 cm', wMed: 7.0, hMed: 63.9 },
+      { month: 5, weightRange: '6.0 ~ 9.2 kg', heightRange: '61.7 ~ 70.1 cm', wMed: 7.5, hMed: 65.9 },
+      { month: 6, weightRange: '6.4 ~ 9.7 kg', heightRange: '63.3 ~ 71.9 cm', wMed: 7.9, hMed: 67.6 },
+      { month: 7, weightRange: '6.7 ~ 10.2 kg', heightRange: '64.8 ~ 73.5 cm', wMed: 8.3, hMed: 69.2 },
+      { month: 8, weightRange: '6.9 ~ 10.5 kg', heightRange: '66.2 ~ 75.0 cm', wMed: 8.6, hMed: 70.6 },
+      { month: 9, weightRange: '7.1 ~ 10.9 kg', heightRange: '67.5 ~ 76.5 cm', wMed: 8.9, hMed: 72.0 },
+      { month: 10, weightRange: '7.4 ~ 11.2 kg', heightRange: '68.7 ~ 77.9 cm', wMed: 9.2, hMed: 73.3 },
+      { month: 11, weightRange: '7.6 ~ 11.5 kg', heightRange: '69.9 ~ 79.2 cm', wMed: 9.4, hMed: 74.5 },
+      { month: 12, weightRange: '7.7 ~ 11.8 kg', heightRange: '71.0 ~ 80.5 cm', wMed: 9.6, hMed: 75.7 },
+    ];
+
+    const DEFAULT_ALARMS = [
+      { id: 'al_1', time: '09:00', title: '☀️ 补充维生素 D3 / AD', enabled: true, lastTriggeredDate: '' },
+      { id: 'al_2', time: '20:00', title: '🛁 睡前洗澡与抚触', enabled: true, lastTriggeredDate: '' },
+    ];
+
+    const ROLES = [
+      { emoji: '👩', name: '妈妈' },
+      { emoji: '👨', name: '爸爸' },
+      { emoji: '👵', name: '奶奶' },
+      { emoji: '🧓', name: '外婆' },
+    ];
+
+    const AGE_GUIDES = [
+      {
+        stage: '0~1 月新生儿',
+        singleFeed: '30 ~ 90 ml / 次',
+        dailyTotal: '400 ~ 700 ml / 天',
+        frequency: '每 2 ~ 3 小时一次（每天 8~12 次）',
+        excretion: '小便 6~8+ 次/天；大便 2~6 次/天（胎便转金黄糊状）',
+        tip: '新生儿胃容量小（如樱桃到鸡蛋大小），按需喂养即可，每次喂完竖抱拍嗝 5~10 分钟防吐奶。'
+      },
+      {
+        stage: '1~3 月龄',
+        singleFeed: '90 ~ 150 ml / 次',
+        dailyTotal: '600 ~ 900 ml / 天',
+        frequency: '每 3 ~ 3.5 小时一次（每天 6~8 次）',
+        excretion: '小便 6~8 次/天；大便 1~4 次/天（部分母乳宝宝可能攒肚）',
+        tip: '夜间连续睡眠逐渐拉长，若宝宝安睡超过 4 小时可不必强行叫醒喂奶，留意猛长期奶量需求增加。'
+      },
+      {
+        stage: '3~6 月龄',
+        singleFeed: '150 ~ 200 ml / 次',
+        dailyTotal: '750 ~ 1000 ml / 天',
+        frequency: '每 3.5 ~ 4 小时一次（每天 5~6 次）',
+        excretion: '小便 6 次左右/天；大便 1~2 次/天',
+        tip: '4个月左右可能出现“厌奶期”，保持安静喂养环境，不强迫喂食；满 6 月龄准备引入高铁米粉辅食。'
+      },
+      {
+        stage: '6~9 月龄',
+        singleFeed: '180 ~ 220 ml / 次 + 1~2顿辅食',
+        dailyTotal: '700 ~ 900 ml / 天',
+        frequency: '每天 4~5 次奶 + 1~2 次辅食',
+        excretion: '大便随辅食添加逐渐成形，颜色受食物影响',
+        tip: '坚持“奶为主、辅食为辅”，优先补充富含铁的肉泥、蛋黄和强化铁米粉。'
+      },
+      {
+        stage: '9~12 月龄',
+        singleFeed: '200 ~ 240 ml / 次 + 2~3顿辅食',
+        dailyTotal: '600 ~ 800 ml / 天',
+        frequency: '每天 3~4 次奶 + 2~3 次辅食',
+        excretion: '每天 1~2 次成形软便',
+        tip: '逐渐过渡到与大人三餐同步的规律作息，锻炼宝宝自主抓握手指食物和用吸管杯喝水。'
+      }
+    ];
+
+    let state = {
+      records: [],
+      growthLogs: [],
+      quickButtons: [],
+      customButtonsUpdatedAt: 0,
+      customButtonsUpdatedBy: '妈妈',
+      alarms: [],
+      settings: {
+        roleEmoji: '👩',
+        roleName: '妈妈',
+        familyCode: 'tuantuan-family-01',
+        babyBirthday: '',
+        darkMode: null,
+        intervalEnabled: true,
+        intervalHours: 3,
+        lastIntervalNotifiedAt: 0,
+      },
+      selectedDate: getTodayStr(),
+      feedMode: 'breast',
+      formulaMl: 90,
+      breast: {
+        leftSec: 0,
+        rightSec: 0,
+        leftMin: 0,
+        rightMin: 0,
+        activeSide: null,
+        intervalId: null,
+      },
+      newBtnColor: 'green',
+      statsSubTab: 'feeding',
+      growthChartMetric: 'both',
+      charts: {
+        feeding: null,
+        excretion: null,
+        growth: null
+      }
+    };
+
+    // ==================== 3. INITIALIZATION ====================
+    document.addEventListener('DOMContentLoaded', () => {
+      loadLocalData();
+      applyTheme();
+      resetFeedTimeToNow();
+      renderRoleUI();
+      renderQuickButtons();
+      renderTimelineAndSummary();
+      renderGrowthSummaryAndList();
+      renderAlarms();
+      selectAgeStage(0);
+      updateIntervalChips();
+      updateNotifPermissionUI();
+      initSupabase();
+
+      // Foreground / visibility change auto-pull so parents switching apps immediately get new buttons
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && supabaseClient) {
+          pullFromSupabase({ silent: true });
+        }
+      });
+
+      // Start background 1-second ticker for "Time since last feed" & "Alarms"
+      setInterval(() => {
+        updateLastFeedBanner();
+        checkReminders();
+      }, 1000);
+    });
+
+    function getTodayStr() {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function getNowTimeStr() {
+      const d = new Date();
+      return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+
+    function getCurrentActorLabel() {
+      return `${state.settings.roleEmoji} ${state.settings.roleName}`;
+    }
+
+    function normalizeButtonsList(rawButtons) {
+      const source = Array.isArray(rawButtons) && rawButtons.length > 0 ? rawButtons : DEFAULT_QUICK_BUTTONS;
+      const seen = new Set();
+      const result = [];
+
+      // Ensure system buttons exist in expected order or preserve custom ones
+      for (const b of source) {
+        if (!b || !b.id || !b.label) continue;
+        if (seen.has(b.id)) continue;
+        seen.add(b.id);
+        result.push({
+          id: String(b.id),
+          emoji: b.emoji || '✨',
+          label: String(b.label),
+          category: b.category || 'custom',
+          color: b.color || 'blue',
+          isSystem: Boolean(b.isSystem),
+          updatedAt: Number(b.updatedAt || b.updated_at || 0),
+        });
+      }
+
+      // Guarantee core system buttons are never accidentally lost
+      for (const sys of DEFAULT_QUICK_BUTTONS) {
+        if (!seen.has(sys.id)) {
+          result.unshift({ ...sys });
+          seen.add(sys.id);
+        }
+      }
+
+      return result;
+    }
+
+    function getCustomButtonsOnly(buttonsList = state.quickButtons) {
+      return normalizeButtonsList(buttonsList).filter(b => !b.isSystem);
+    }
+
+    function loadLocalData() {
+      try {
+        const savedRecords = localStorage.getItem(STORAGE_KEYS.RECORDS);
+        state.records = savedRecords ? JSON.parse(savedRecords) : [];
+
+        const savedGrowth = localStorage.getItem(STORAGE_KEYS.GROWTH);
+        state.growthLogs = savedGrowth ? JSON.parse(savedGrowth) : [];
+
+        const savedBtns = localStorage.getItem(STORAGE_KEYS.BUTTONS);
+        state.quickButtons = normalizeButtonsList(savedBtns ? JSON.parse(savedBtns) : DEFAULT_QUICK_BUTTONS);
+
+        const savedMeta = localStorage.getItem(STORAGE_KEYS.CUSTOM_BUTTONS_META);
+        if (savedMeta) {
+          const meta = JSON.parse(savedMeta);
+          state.customButtonsUpdatedAt = Number(meta.updatedAt || 0);
+          state.customButtonsUpdatedBy = meta.updatedBy || '妈妈';
+        }
+
+        const savedAlarms = localStorage.getItem(STORAGE_KEYS.ALARMS);
+        state.alarms = savedAlarms ? JSON.parse(savedAlarms) : [...DEFAULT_ALARMS];
+
+        const savedSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+        if (savedSettings) {
+          state.settings = { ...state.settings, ...JSON.parse(savedSettings) };
+        }
+      } catch (e) {
+        console.error('Local storage load error:', e);
+        state.quickButtons = [...DEFAULT_QUICK_BUTTONS];
+      }
+    }
+
+    function saveLocalData() {
+      try {
+        localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(state.records));
+        localStorage.setItem(STORAGE_KEYS.GROWTH, JSON.stringify(state.growthLogs));
+        localStorage.setItem(STORAGE_KEYS.BUTTONS, JSON.stringify(state.quickButtons));
+        localStorage.setItem(STORAGE_KEYS.CUSTOM_BUTTONS_META, JSON.stringify({
+          updatedAt: state.customButtonsUpdatedAt,
+          updatedBy: state.customButtonsUpdatedBy
+        }));
+        localStorage.setItem(STORAGE_KEYS.ALARMS, JSON.stringify(state.alarms));
+        localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(state.settings));
+      } catch (e) {
+        console.error('Local storage save error:', e);
+      }
+    }
+
+    // ==================== 4. SUPABASE REALTIME SYNC (WITH CUSTOM BUTTONS) ====================
+    function getWriteClient() {
+      return serviceSupabaseClient || supabaseClient;
+    }
+
+    async function initSupabase() {
+      document.getElementById('familyCodeInput').value = state.settings.familyCode;
+      try {
+        if (window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY) {
+          supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            auth: { persistSession: false, autoRefreshToken: false }
+          });
+          if (SUPABASE_SERVICE_KEY) {
+            serviceSupabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+              auth: { persistSession: false, autoRefreshToken: false }
+            });
+          }
+          await pullFromSupabase({ silent: true });
+          subscribeSupabaseRealtime();
+          startBackgroundCloudPolling();
+        } else {
+          setSyncStatus('local', '本机离线保存');
+        }
+      } catch (err) {
+        console.warn('Supabase fallback to local:', err);
+        setSyncStatus('local', '本机保存 (未建云表)');
+      }
+    }
+
+    function startBackgroundCloudPolling() {
+      if (pollTimerId) clearInterval(pollTimerId);
+      // Lightweight polling every 8 seconds as a reliable fallback alongside Realtime
+      pollTimerId = setInterval(() => {
+        if (document.visibilityState === 'visible' && supabaseClient) {
+          pullButtonConfigFromSupabase({ silent: true });
+        }
+      }, 8000);
+    }
+
+    async function pullFromSupabase({ silent = false } = {}) {
+      if (!supabaseClient) return;
+      try {
+        const { data, error } = await supabaseClient
+          .from('feeding_records')
+          .select('*')
+          .eq('family_code', state.settings.familyCode)
+          .order('timestamp', { ascending: false })
+          .limit(500);
+
+        if (error) {
+          cloudAvailable = false;
+          setSyncStatus('local', '本机保存 (点击配置云表)');
+          return;
+        }
+
+        cloudAvailable = true;
+        setSyncStatus('cloud', '云端已实时同步');
+
+        if (data && Array.isArray(data)) {
+          const map = new Map();
+          state.records.forEach(r => map.set(r.id, r));
+          data.forEach(row => {
+            map.set(row.id, {
+              id: row.id,
+              date: row.record_date,
+              time: row.record_time,
+              timestamp: Number(row.timestamp),
+              category: row.category,
+              title: row.title,
+              detail: row.detail || '',
+              leftMin: row.left_min || 0,
+              rightMin: row.right_min || 0,
+              formulaMl: row.formula_ml || 0,
+              recorder: row.recorder || '妈妈',
+            });
+          });
+          state.records = Array.from(map.values()).sort((a, b) => b.timestamp - a.timestamp);
+        }
+
+        // Pull growth_logs
+        const { data: gData, error: gErr } = await supabaseClient
+          .from('growth_logs')
+          .select('*')
+          .eq('family_code', state.settings.familyCode)
+          .order('timestamp', { ascending: false })
+          .limit(200);
+
+        if (!gErr && Array.isArray(gData)) {
+          const gMap = new Map();
+          state.growthLogs.forEach(g => gMap.set(g.id, g));
+          gData.forEach(row => {
+            gMap.set(row.id, {
+              id: row.id,
+              date: row.measure_date,
+              timestamp: Number(row.timestamp),
+              weightKg: row.weight_kg !== null ? Number(row.weight_kg) : null,
+              heightCm: row.height_cm !== null ? Number(row.height_cm) : null,
+              headCm: row.head_cm !== null ? Number(row.head_cm) : null,
+              note: row.note || '',
+              recorder: row.recorder || '妈妈',
+            });
+          });
+          state.growthLogs = Array.from(gMap.values()).sort((a, b) => b.timestamp - a.timestamp);
+        }
+
+        // Pull custom button config
+        await pullButtonConfigFromSupabase({ silent: true });
+
+        saveLocalData();
+        renderTimelineAndSummary();
+        renderGrowthSummaryAndList();
+        updateLastFeedBanner();
+        if (!silent) {
+          showIslandToast('🔄', '已完成云端数据与按钮同步');
+        }
+      } catch (e) {
+        cloudAvailable = false;
+        setSyncStatus('local', '本机离线保存');
+      }
+    }
+
+    /**
+     * Merge incoming custom buttons with local buttons by ID & updatedAt timestamp
+     * so neither device overwrites newly added/edited buttons of the other parent.
+     */
+    function mergeCustomButtonsWithLocal(incomingCustomButtons, incomingUpdatedAt, incomingUpdatedBy) {
+      const safeIncoming = Array.isArray(incomingCustomButtons) ? incomingCustomButtons : [];
+      const remoteTs = Number(incomingUpdatedAt || 0);
+      const localTs = Number(state.customButtonsUpdatedAt || 0);
+
+      const localSystemButtons = state.quickButtons.filter(b => b.isSystem);
+      const localCustomButtons = getCustomButtonsOnly(state.quickButtons);
+
+      const byId = new Map();
+      localCustomButtons.forEach(b => byId.set(b.id, { ...b }));
+
+      // If remote config is strictly newer, adopt remote order & fields while retaining any brand-new local button created after remoteTs
+      if (remoteTs > localTs) {
+        const mergedOrdered = [];
+        const remoteIdSet = new Set();
+
+        safeIncoming.forEach(rb => {
+          if (!rb || !rb.id || !rb.label) return;
+          remoteIdSet.add(rb.id);
+          mergedOrdered.push({
+            id: String(rb.id),
+            emoji: rb.emoji || '✨',
+            label: String(rb.label),
+            category: rb.category || 'custom',
+            color: rb.color || 'blue',
+            isSystem: false,
+            updatedAt: Number(rb.updatedAt || remoteTs),
+          });
+        });
+
+        // Keep any local custom button that was created strictly after remoteTs
+        localCustomButtons.forEach(lb => {
+          if (!remoteIdSet.has(lb.id) && Number(lb.updatedAt || 0) > remoteTs) {
+            mergedOrdered.push(lb);
+          }
+        });
+
+        state.quickButtons = normalizeButtonsList([...localSystemButtons, ...mergedOrdered]);
+        state.customButtonsUpdatedAt = remoteTs;
+        state.customButtonsUpdatedBy = incomingUpdatedBy || '家人';
+        return true;
+      }
+
+      // If remoteTs === localTs, merge any unseen button IDs by id
+      if (remoteTs === localTs && safeIncoming.length > 0) {
+        let changed = false;
+        const currentIds = new Set(localCustomButtons.map(b => b.id));
+        const extra = [];
+        safeIncoming.forEach(rb => {
+          if (rb && rb.id && rb.label && !currentIds.has(rb.id)) {
+            currentIds.add(rb.id);
+            extra.push({
+              id: String(rb.id),
+              emoji: rb.emoji || '✨',
+              label: String(rb.label),
+              category: rb.category || 'custom',
+              color: rb.color || 'blue',
+              isSystem: false,
+              updatedAt: Number(rb.updatedAt || remoteTs),
+            });
+            changed = true;
+          }
+        });
+        if (changed) {
+          state.quickButtons = normalizeButtonsList([...localSystemButtons, ...localCustomButtons, ...extra]);
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    async function pullButtonConfigFromSupabase({ silent = false } = {}) {
+      if (!supabaseClient) return { ok: false, reason: '未初始化云端客户端' };
+      const client = getWriteClient();
+      try {
+        const { data, error } = await client
+          .from('family_button_configs')
+          .select('family_code, custom_buttons, updated_at, updated_by, updated_iso')
+          .eq('family_code', state.settings.familyCode)
+          .maybeSingle();
+
+        if (error) {
+          buttonConfigTableReady = false;
+          updateButtonSyncStatusLabel('⚠️ 需建 family_button_configs 表', 'text-amber-500');
+          return { ok: false, reason: error.message || '数据表尚未创建' };
+        }
+
+        buttonConfigTableReady = true;
+        cloudAvailable = true;
+
+        if (!data) {
+          updateButtonSyncStatusLabel('云端暂无自定义按钮配置', 'text-gray-400');
+          return { ok: true, empty: true };
+        }
+
+        const parsedButtons = Array.isArray(data.custom_buttons)
+          ? data.custom_buttons
+          : (typeof data.custom_buttons === 'string' ? JSON.parse(data.custom_buttons || '[]') : []);
+        const remoteTs = Number(data.updated_at || 0);
+        const remoteBy = data.updated_by || '家人';
+
+        const prevCustomJson = JSON.stringify(getCustomButtonsOnly());
+        const changed = mergeCustomButtonsWithLocal(parsedButtons, remoteTs, remoteBy);
+        const nextCustomJson = JSON.stringify(getCustomButtonsOnly());
+
+        if (changed || prevCustomJson !== nextCustomJson) {
+          saveLocalData();
+          renderQuickButtons();
+          if (!silent) {
+            showIslandToast('✨', `${remoteBy} 更新了自定义按钮（共 ${getCustomButtonsOnly().length} 个）`);
+          }
+        }
+
+        const timeLabel = remoteTs ? new Date(remoteTs).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '刚刚';
+        updateButtonSyncStatusLabel(`已同步 (${getCustomButtonsOnly().length}个 · ${remoteBy} ${timeLabel})`, 'text-[#34C759]');
+        return { ok: true, count: getCustomButtonsOnly().length, updatedBy: remoteBy, updatedAt: remoteTs };
+      } catch (e) {
+        return { ok: false, reason: e.message || '拉取异常' };
+      }
+    }
+
+    async function pushCustomButtonsToSupabase({ showToast = false } = {}) {
+      const customList = getCustomButtonsOnly();
+      const nowTs = Date.now();
+      const actor = getCurrentActorLabel();
+
+      state.customButtonsUpdatedAt = nowTs;
+      state.customButtonsUpdatedBy = actor;
+      saveLocalData();
+      updateButtonSyncMetaUI();
+
+      if (!supabaseClient) {
+        if (showToast) showIslandToast('💾', '已保存在本机（当前离线）');
+        return { ok: false, reason: '离线模式' };
+      }
+
+      const client = getWriteClient();
+      try {
+        const payload = {
+          family_code: state.settings.familyCode,
+          custom_buttons: customList,
+          updated_at: nowTs,
+          updated_by: actor,
+          updated_iso: new Date(nowTs).toISOString(),
+        };
+
+        const { error } = await client
+          .from('family_button_configs')
+          .upsert(payload, { onConflict: 'family_code' });
+
+        if (error) {
+          buttonConfigTableReady = false;
+          updateButtonSyncStatusLabel('⚠️ 建表后即可云同步按钮', 'text-amber-500');
+          if (showToast) {
+            showIslandToast('⚠️', '云表尚未创建，已存本机；可在“云同步”弹窗复制建表SQL');
+          }
+          return { ok: false, reason: error.message };
+        }
+
+        buttonConfigTableReady = true;
+        cloudAvailable = true;
+        setSyncStatus('cloud', '云端已实时同步');
+        const timeLabel = new Date(nowTs).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        updateButtonSyncStatusLabel(`已同步至云端 (${customList.length}个 · ${timeLabel})`, 'text-[#34C759]');
+
+        if (showToast) {
+          showIslandToast('☁️', `已同步 ${customList.length} 个自定义按钮至云端`);
+        }
+        return { ok: true, count: customList.length };
+      } catch (e) {
+        if (showToast) showIslandToast('⚠️', '按钮云端推送失败，已保留在本机');
+        return { ok: false, reason: e.message };
+      }
+    }
+
+    async function syncCustomButtonsNow(showToast = true) {
+      if (!supabaseClient) {
+        return showIslandToast('💾', '当前为本机模式，按钮已保存');
+      }
+      // First pull latest remote to merge any updates from the other parent, then push merged state
+      await pullButtonConfigFromSupabase({ silent: true });
+      await pushCustomButtonsToSupabase({ showToast });
+    }
+
+    async function checkCloudButtonSyncStatus() {
+      const localCustom = getCustomButtonsOnly();
+      if (!supabaseClient) {
+        updateButtonSyncStatusLabel('本机保存模式', 'text-amber-500');
+        return showIslandToast('💾', `本机共有 ${localCustom.length} 个自定义按钮`);
+      }
+      const res = await pullButtonConfigFromSupabase({ silent: true });
+      if (!res.ok) {
+        showIslandToast('🩺', `云端按钮表未就绪（本机 ${localCustom.length} 个）：请打开云同步复制SQL建表`);
+        return;
+      }
+      const cloudCount = res.empty ? 0 : (res.count || 0);
+      showIslandToast('🩺', `同步正常！本机 ${localCustom.length} 个 · 云端 ${cloudCount} 个自定义按钮`);
+    }
+
+    function updateButtonSyncStatusLabel(text, colorClass = 'text-[#007AFF]') {
+      const modalBtnStatus = document.getElementById('modalButtonSyncStatus');
+      if (modalBtnStatus) {
+        modalBtnStatus.textContent = text;
+        modalBtnStatus.className = `font-semibold ${colorClass}`;
+      }
+      updateButtonSyncMetaUI();
+    }
+
+    function updateButtonSyncMetaUI() {
+      const metaEl = document.getElementById('modalButtonSyncMeta');
+      const hintEl = document.getElementById('customBtnSyncHint');
+      const customCount = getCustomButtonsOnly().length;
+      const actor = state.customButtonsUpdatedBy || '妈妈';
+      const timeStr = state.customButtonsUpdatedAt
+        ? new Date(state.customButtonsUpdatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+        : '';
+
+      if (metaEl) {
+        metaEl.textContent = customCount > 0
+          ? `已配置 ${customCount} 个自定义按钮${timeStr ? ` · 最近由 ${actor} 于 ${timeStr} 同步` : ''}`
+          : '添加后将自动同步至家庭共享端';
+      }
+      if (hintEl) {
+        hintEl.textContent = customCount > 0
+          ? `点击即记 · 含 ${customCount} 个自定义按钮（自动多端同步）`
+          : '点击即记 · 爸爸妈妈自定义按钮自动同步';
+      }
+    }
+
+    async function pushRecordToSupabase(rec) {
+      const client = getWriteClient();
+      if (!client || !cloudAvailable) return;
+      try {
+        await client.from('feeding_records').upsert({
+          id: rec.id,
+          family_code: state.settings.familyCode,
+          record_date: rec.date,
+          record_time: rec.time,
+          timestamp: rec.timestamp,
+          category: rec.category,
+          title: rec.title,
+          detail: rec.detail,
+          left_min: rec.leftMin || 0,
+          right_min: rec.rightMin || 0,
+          formula_ml: rec.formulaMl || 0,
+          recorder: rec.recorder,
+        });
+      } catch (e) {
+        console.warn('Push error:', e);
+      }
+    }
+
+    async function pushGrowthToSupabase(g) {
+      const client = getWriteClient();
+      if (!client || !cloudAvailable) return;
+      try {
+        await client.from('growth_logs').upsert({
+          id: g.id,
+          family_code: state.settings.familyCode,
+          measure_date: g.date,
+          timestamp: g.timestamp,
+          weight_kg: g.weightKg,
+          height_cm: g.heightCm,
+          head_cm: g.headCm,
+          note: g.note,
+          recorder: g.recorder,
+        });
+      } catch (e) {
+        console.warn('Push growth error:', e);
+      }
+    }
+
+    async function deleteGrowthFromSupabase(id) {
+      const client = getWriteClient();
+      if (!client || !cloudAvailable) return;
+      try {
+        await client.from('growth_logs').delete().eq('id', id);
+      } catch (e) {
+        console.warn('Delete growth error:', e);
+      }
+    }
+
+    async function deleteRecordFromSupabase(id) {
+      const client = getWriteClient();
+      if (!client || !cloudAvailable) return;
+      try {
+        await client.from('feeding_records').delete().eq('id', id);
+      } catch (e) {
+        console.warn('Delete error:', e);
+      }
+    }
+
+    function subscribeSupabaseRealtime() {
+      if (!supabaseClient) return;
+      if (realtimeChannel) {
+        supabaseClient.removeChannel(realtimeChannel);
+      }
+
+      realtimeChannel = supabaseClient
+        .channel(`tuantuan-realtime-${state.settings.familyCode}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'feeding_records',
+          filter: `family_code=eq.${state.settings.familyCode}`
+        }, (payload) => {
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const row = payload.new;
+            const incoming = {
+              id: row.id,
+              date: row.record_date,
+              time: row.record_time,
+              timestamp: Number(row.timestamp),
+              category: row.category,
+              title: row.title,
+              detail: row.detail || '',
+              leftMin: row.left_min || 0,
+              rightMin: row.right_min || 0,
+              formulaMl: row.formula_ml || 0,
+              recorder: row.recorder || '家人',
+            };
+            const existsIdx = state.records.findIndex(r => r.id === incoming.id);
+            if (existsIdx >= 0) {
+              state.records[existsIdx] = incoming;
+            } else {
+              state.records.unshift(incoming);
+              showIslandToast('👨‍👩‍👧', `${incoming.recorder}刚记录了：${incoming.title}`);
+            }
+            state.records.sort((a, b) => b.timestamp - a.timestamp);
+            saveLocalData();
+            renderTimelineAndSummary();
+            updateLastFeedBanner();
+          } else if (payload.eventType === 'DELETE') {
+            state.records = state.records.filter(r => r.id !== payload.old.id);
+            saveLocalData();
+            renderTimelineAndSummary();
+          }
+        })
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'growth_logs',
+          filter: `family_code=eq.${state.settings.familyCode}`
+        }, (payload) => {
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const row = payload.new;
+            const incoming = {
+              id: row.id,
+              date: row.measure_date,
+              timestamp: Number(row.timestamp),
+              weightKg: row.weight_kg !== null ? Number(row.weight_kg) : null,
+              heightCm: row.height_cm !== null ? Number(row.height_cm) : null,
+              headCm: row.head_cm !== null ? Number(row.head_cm) : null,
+              note: row.note || '',
+              recorder: row.recorder || '家人',
+            };
+            const idx = state.growthLogs.findIndex(g => g.id === incoming.id);
+            if (idx >= 0) state.growthLogs[idx] = incoming;
+            else state.growthLogs.unshift(incoming);
+            state.growthLogs.sort((a, b) => b.timestamp - a.timestamp);
+            saveLocalData();
+            renderGrowthSummaryAndList();
+            if (!document.getElementById('statsGrowthSubView').classList.contains('hidden')) {
+              renderGrowthChart();
+            }
+          } else if (payload.eventType === 'DELETE') {
+            state.growthLogs = state.growthLogs.filter(g => g.id !== payload.old.id);
+            saveLocalData();
+            renderGrowthSummaryAndList();
+          }
+        })
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'family_button_configs',
+          filter: `family_code=eq.${state.settings.familyCode}`
+        }, (payload) => {
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const row = payload.new;
+            const parsedButtons = Array.isArray(row.custom_buttons)
+              ? row.custom_buttons
+              : (typeof row.custom_buttons === 'string' ? JSON.parse(row.custom_buttons || '[]') : []);
+            const remoteTs = Number(row.updated_at || Date.now());
+            const remoteBy = row.updated_by || '家人';
+
+            // Avoid duplicate toast if this device just pushed this exact timestamp
+            const isSelfPush = remoteTs === state.customButtonsUpdatedAt && remoteBy === state.customButtonsUpdatedBy;
+            mergeCustomButtonsWithLocal(parsedButtons, remoteTs, remoteBy);
+            saveLocalData();
+            renderQuickButtons();
+
+            const timeLabel = new Date(remoteTs).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            updateButtonSyncStatusLabel(`实时同步 (${getCustomButtonsOnly().length}个 · ${remoteBy} ${timeLabel})`, 'text-[#34C759]');
+
+            if (!isSelfPush) {
+              showIslandToast('🔘', `${remoteBy} 同步了自定义快捷按钮`);
+            }
+          }
+        })
+        .subscribe();
+    }
+
+    function setSyncStatus(mode, text) {
+      const dot = document.getElementById('syncDot');
+      const label = document.getElementById('syncLabel');
+      const modalStatus = document.getElementById('modalSyncStatus');
+      label.textContent = text;
+      modalStatus.textContent = text;
+      if (mode === 'cloud') {
+        dot.className = 'w-2 h-2 rounded-full bg-[#34C759] pulse-dot';
+        modalStatus.className = 'font-semibold text-[#34C759]';
+      } else {
+        dot.className = 'w-2 h-2 rounded-full bg-amber-400';
+        modalStatus.className = 'font-semibold text-amber-500';
+      }
+    }
+
+    function updateFamilyCode() {
+      const val = document.getElementById('familyCodeInput').value.trim();
+      if (!val) return showIslandToast('⚠️', '家庭共享码不能为空');
+      state.settings.familyCode = val;
+      saveLocalData();
+      subscribeSupabaseRealtime();
+      pullFromSupabase({ silent: false });
+      showIslandToast('👨‍👩‍👧', `已切换到家庭空间：${val}`);
+    }
+
+    function forceCloudPull() {
+      pullFromSupabase({ silent: false });
+    }
+
+    function copySqlScript() {
+      const text = document.getElementById('supabaseSqlCode').innerText;
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showIslandToast('📋', 'SQL 建表脚本已复制！请前往 Supabase 粘贴运行');
+    }
+
+    // ==================== 5. THEME & ROLE ====================
+    function applyTheme() {
+      const html = document.documentElement;
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const isDark = state.settings.darkMode === null ? prefersDark : state.settings.darkMode;
+      if (isDark) {
+        html.classList.add('dark');
+        document.getElementById('darkModeIcon').textContent = '☀️';
+      } else {
+        html.classList.remove('dark');
+        document.getElementById('darkModeIcon').textContent = '🌙';
+      }
+    }
+
+    function toggleDarkMode() {
+      const isCurrentlyDark = document.documentElement.classList.contains('dark');
+      state.settings.darkMode = !isCurrentlyDark;
+      saveLocalData();
+      applyTheme();
+      if (!document.getElementById('tab-stats').classList.contains('hidden')) {
+        renderCharts();
+        renderGrowthChart();
+      }
+      showIslandToast(state.settings.darkMode ? '🌙' : '☀️', state.settings.darkMode ? '已切换深色护眼模式' : '已切换浅色模式');
+    }
+
+    function cycleRole() {
+      const idx = ROLES.findIndex(r => r.name === state.settings.roleName);
+      const next = ROLES[(idx + 1) % ROLES.length];
+      setRole(next.emoji, next.name);
+    }
+
+    function setRole(emoji, name) {
+      state.settings.roleEmoji = emoji;
+      state.settings.roleName = name;
+      saveLocalData();
+      renderRoleUI();
+      showIslandToast(emoji, `当前操作人：${name}`);
+    }
+
+    function renderRoleUI() {
+      document.getElementById('currentRoleEmoji').textContent = state.settings.roleEmoji;
+      document.getElementById('currentRoleName').textContent = state.settings.roleName;
+    }
+
+    // ==================== 6. DATE ARCHIVE NAVIGATION ====================
+    function changeDate(offsetDays) {
+      const parts = state.selectedDate.split('-').map(Number);
+      const d = new Date(parts[0], parts[1] - 1, parts[2]);
+      d.setDate(d.getDate() + offsetDays);
+      const newStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      state.selectedDate = newStr;
+      updateDateUI();
+      renderTimelineAndSummary();
+    }
+
+    function goToday() {
+      state.selectedDate = getTodayStr();
+      updateDateUI();
+      renderTimelineAndSummary();
+    }
+
+    function updateDateUI() {
+      const today = getTodayStr();
+      const label = document.getElementById('selectedDateLabel');
+      const sumTitle = document.getElementById('summaryDateTitle');
+      const timeTitle = document.getElementById('timelineTitle');
+
+      if (state.selectedDate === today) {
+        label.textContent = '今天';
+        sumTitle.textContent = '今日';
+        timeTitle.textContent = '今日';
+      } else {
+        const shortDate = state.selectedDate.slice(5).replace('-', '月') + '日';
+        label.textContent = shortDate;
+        sumTitle.textContent = shortDate;
+        timeTitle.textContent = shortDate;
+      }
+    }
+
+    // ==================== 7. FEEDING (BREAST L/R & FORMULA) ====================
+    function setFeedMode(mode) {
+      state.feedMode = mode;
+      const bBtn = document.getElementById('segBreastBtn');
+      const fBtn = document.getElementById('segFormulaBtn');
+      const bPanel = document.getElementById('breastPanel');
+      const fPanel = document.getElementById('formulaPanel');
+
+      if (mode === 'breast') {
+        bBtn.className = 'py-1.5 rounded-lg text-sm font-semibold bg-white dark:bg-[#3A3A3C] shadow-sm transition';
+        fBtn.className = 'py-1.5 rounded-lg text-sm font-semibold text-gray-500 dark:text-gray-400 transition';
+        bPanel.classList.remove('hidden');
+        fPanel.classList.add('hidden');
+      } else {
+        fBtn.className = 'py-1.5 rounded-lg text-sm font-semibold bg-white dark:bg-[#3A3A3C] shadow-sm transition';
+        bBtn.className = 'py-1.5 rounded-lg text-sm font-semibold text-gray-500 dark:text-gray-400 transition';
+        fPanel.classList.remove('hidden');
+        bPanel.classList.add('hidden');
+      }
+    }
+
+    function resetFeedTimeToNow() {
+      document.getElementById('feedTimeInput').value = getNowTimeStr();
+    }
+
+    function toggleBreastTimer(side) {
+      const b = state.breast;
+      if (b.activeSide === side) {
+        clearInterval(b.intervalId);
+        b.intervalId = null;
+        b.activeSide = null;
+        updateBreastTimerUI();
+        return;
+      }
+
+      if (b.intervalId) clearInterval(b.intervalId);
+      b.activeSide = side;
+      updateBreastTimerUI();
+
+      b.intervalId = setInterval(() => {
+        if (b.activeSide === 'left') {
+          b.leftSec++;
+          b.leftMin = Math.max(1, Math.round(b.leftSec / 60));
+        } else if (b.activeSide === 'right') {
+          b.rightSec++;
+          b.rightMin = Math.max(1, Math.round(b.rightSec / 60));
+        }
+        updateBreastTimerUI();
+      }, 1000);
+    }
+
+    function adjustBreastMin(side, delta) {
+      if (side === 'left') {
+        state.breast.leftMin = Math.max(0, state.breast.leftMin + delta);
+        state.breast.leftSec = state.breast.leftMin * 60;
+      } else {
+        state.breast.rightMin = Math.max(0, state.breast.rightMin + delta);
+        state.breast.rightSec = state.breast.rightMin * 60;
+      }
+      updateBreastTimerUI();
+    }
+
+    function setQuickBreast(l, r) {
+      if (state.breast.intervalId) {
+        clearInterval(state.breast.intervalId);
+        state.breast.intervalId = null;
+        state.breast.activeSide = null;
+      }
+      state.breast.leftMin = l;
+      state.breast.rightMin = r;
+      state.breast.leftSec = l * 60;
+      state.breast.rightSec = r * 60;
+      updateBreastTimerUI();
+    }
+
+    function formatMMSS(sec) {
+      const m = String(Math.floor(sec / 60)).padStart(2, '0');
+      const s = String(sec % 60).padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    function updateBreastTimerUI() {
+      const b = state.breast;
+      document.getElementById('leftTimerDisplay').textContent = formatMMSS(b.leftSec);
+      document.getElementById('rightTimerDisplay').textContent = formatMMSS(b.rightSec);
+      document.getElementById('leftMinVal').textContent = b.leftMin;
+      document.getElementById('rightMinVal').textContent = b.rightMin;
+      document.getElementById('totalBreastPreview').textContent = `左 ${b.leftMin} 分 · 右 ${b.rightMin} 分`;
+
+      const lBtn = document.getElementById('leftTimerBtn');
+      const rBtn = document.getElementById('rightTimerBtn');
+      const lSt = document.getElementById('leftTimerStatus');
+      const rSt = document.getElementById('rightTimerStatus');
+
+      if (b.activeSide === 'left') {
+        lBtn.textContent = '⏸ 暂停左乳计时';
+        lSt.textContent = '计时中...';
+        lSt.className = 'text-[10px] font-bold text-[#FF2D55] pulse-dot';
+      } else {
+        lBtn.textContent = '▶ 开始左乳计时';
+        lSt.textContent = b.leftMin > 0 ? '已计' : '待计时';
+        lSt.className = 'text-[10px] text-gray-400';
+      }
+
+      if (b.activeSide === 'right') {
+        rBtn.textContent = '⏸ 暂停右乳计时';
+        rSt.textContent = '计时中...';
+        rSt.className = 'text-[10px] font-bold text-[#AF52DE] pulse-dot';
+      } else {
+        rBtn.textContent = '▶ 开始右乳计时';
+        rSt.textContent = b.rightMin > 0 ? '已计' : '待计时';
+        rSt.className = 'text-[10px] text-gray-400';
+      }
+    }
+
+    function saveBreastRecord() {
+      const l = state.breast.leftMin;
+      const r = state.breast.rightMin;
+      if (l === 0 && r === 0) {
+        return showIslandToast('⚠️', '请先计时或设置左/右侧喂奶分钟数');
+      }
+      if (state.breast.intervalId) {
+        clearInterval(state.breast.intervalId);
+        state.breast.intervalId = null;
+        state.breast.activeSide = null;
+      }
+
+      const timeStr = document.getElementById('feedTimeInput').value || getNowTimeStr();
+      const total = l + r;
+      const detailParts = [];
+      if (l > 0) detailParts.push(`左侧 ${l} 分钟`);
+      if (r > 0) detailParts.push(`右侧 ${r} 分钟`);
+
+      addRecord({
+        category: 'breast',
+        title: `母乳亲喂 ${total} 分钟`,
+        detail: detailParts.join(' · '),
+        leftMin: l,
+        rightMin: r,
+        formulaMl: 0,
+        time: timeStr
+      });
+
+      setQuickBreast(0, 0);
+      resetFeedTimeToNow();
+    }
+
+    function setFormulaMl(val) {
+      const ml = Math.max(5, Math.min(350, Number(val)));
+      state.formulaMl = ml;
+      document.getElementById('formulaMlDisplay').textContent = ml;
+      document.getElementById('formulaBtnPreview').textContent = ml;
+      document.getElementById('formulaSlider').value = ml;
+    }
+
+    function adjustFormulaMl(delta) {
+      setFormulaMl(state.formulaMl + delta);
+    }
+
+    function saveFormulaRecord() {
+      const ml = state.formulaMl;
+      const timeStr = document.getElementById('feedTimeInput').value || getNowTimeStr();
+      addRecord({
+        category: 'formula',
+        title: `配方奶粉 ${ml} ml`,
+        detail: `奶量 ${ml} 毫升`,
+        leftMin: 0,
+        rightMin: 0,
+        formulaMl: ml,
+        time: timeStr
+      });
+      resetFeedTimeToNow();
+    }
+
+    // ==================== 8. QUICK BUTTONS (USER EDITABLE + MULTI-DEVICE SYNC) ====================
+    function renderQuickButtons() {
+      state.quickButtons = normalizeButtonsList(state.quickButtons);
+      const grid = document.getElementById('quickButtonsGrid');
+      const colorMap = {
+        green: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200/60 dark:border-emerald-800/40',
+        orange: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200/60 dark:border-amber-800/40',
+        blue: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200/60 dark:border-blue-800/40',
+        purple: 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200/60 dark:border-purple-800/40',
+        pink: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200/60 dark:border-rose-800/40',
+      };
+
+      grid.innerHTML = state.quickButtons.map(btn => `
+        <button onclick="handleQuickBtnClick('${btn.id}')" class="ios-press flex flex-col items-center justify-center p-3 rounded-2xl border ${colorMap[btn.color] || colorMap.blue} transition">
+          <span class="text-2xl mb-1">${btn.emoji}</span>
+          <span class="text-xs font-bold truncate max-w-full">${btn.label}</span>
+        </button>
+      `).join('');
+
+      updateButtonSyncMetaUI();
+      renderEditableButtonsModalList();
+    }
+
+    function handleQuickBtnClick(btnId) {
+      const btn = state.quickButtons.find(b => b.id === btnId);
+      if (!btn) return;
+
+      if (btn.category === 'poop') {
+        openModal('poopModal');
+        return;
+      }
+
+      addRecord({
+        category: btn.category,
+        title: `${btn.emoji} ${btn.label}`,
+        detail: btn.category === 'pee' ? '常规小便记录' : (btn.category === 'diaper' ? '已更换干净尿不湿' : '日常护理记录'),
+        time: getNowTimeStr()
+      });
+    }
+
+    function confirmPoopRecord(statusText) {
+      closeModal('poopModal');
+      addRecord({
+        category: 'poop',
+        title: `💩 大便 (${statusText})`,
+        detail: `性状：${statusText}`,
+        time: getNowTimeStr()
+      });
+    }
+
+    function renderEditableButtonsModalList() {
+      const list = document.getElementById('editableButtonList');
+      if (!list) return;
+      list.innerHTML = state.quickButtons.map((btn, index) => `
+        <div class="flex items-center justify-between bg-[#F2F2F7] dark:bg-[#2C2C2E] px-3 py-2 rounded-xl gap-2">
+          <div class="flex items-center gap-2 min-w-0 flex-1">
+            <span class="text-lg shrink-0">${btn.emoji}</span>
+            <input type="text" value="${btn.label}" onchange="renameQuickButton(${index}, this.value)" class="bg-transparent text-sm font-semibold min-w-0 flex-1 focus:outline-none border-b border-transparent focus:border-[#007AFF]" />
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <button onclick="moveQuickButton(${index}, -1)" ${index === 0 ? 'disabled' : ''} class="px-1.5 py-0.5 rounded bg-white/70 dark:bg-black/30 text-xs disabled:opacity-30">↑</button>
+            <button onclick="moveQuickButton(${index}, 1)" ${index === state.quickButtons.length - 1 ? 'disabled' : ''} class="px-1.5 py-0.5 rounded bg-white/70 dark:bg-black/30 text-xs disabled:opacity-30">↓</button>
+            ${btn.isSystem
+              ? '<span class="text-[10px] text-gray-400 ml-1">核心项</span>'
+              : `<button onclick="deleteQuickButton(${index})" class="text-xs text-rose-500 font-semibold px-1.5 py-1">删除</button>`}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renameQuickButton(idx, newName) {
+      const trimmed = newName.trim();
+      if (!trimmed || !state.quickButtons[idx]) return;
+      state.quickButtons[idx].label = trimmed;
+      state.quickButtons[idx].updatedAt = Date.now();
+      renderQuickButtons();
+      pushCustomButtonsToSupabase({ showToast: true });
+    }
+
+    function moveQuickButton(idx, delta) {
+      const targetIdx = idx + delta;
+      if (targetIdx < 0 || targetIdx >= state.quickButtons.length) return;
+      const copy = [...state.quickButtons];
+      const temp = copy[idx];
+      copy[idx] = copy[targetIdx];
+      copy[targetIdx] = temp;
+      state.quickButtons = copy;
+      renderQuickButtons();
+      pushCustomButtonsToSupabase({ showToast: true });
+    }
+
+    function deleteQuickButton(idx) {
+      if (!state.quickButtons[idx] || state.quickButtons[idx].isSystem) return;
+      state.quickButtons.splice(idx, 1);
+      renderQuickButtons();
+      pushCustomButtonsToSupabase({ showToast: true });
+    }
+
+    function selectNewBtnColor(color, el) {
+      state.newBtnColor = color;
+      const btns = document.querySelectorAll('#colorPickerRow button');
+      btns.forEach(b => b.classList.remove('ring-2', 'ring-offset-2'));
+      if (el) el.classList.add('ring-2', 'ring-offset-2');
+    }
+
+    function addCustomQuickButton() {
+      const emoji = document.getElementById('newBtnEmoji').value.trim() || '✨';
+      const label = document.getElementById('newBtnLabel').value.trim();
+      if (!label) return showIslandToast('⚠️', '请输入按钮名称');
+
+      const nowTs = Date.now();
+      state.quickButtons.push({
+        id: 'btn_custom_' + nowTs + '_' + Math.random().toString(36).slice(2, 6),
+        emoji,
+        label,
+        category: 'custom',
+        color: state.newBtnColor,
+        isSystem: false,
+        updatedAt: nowTs
+      });
+      document.getElementById('newBtnLabel').value = '';
+      renderQuickButtons();
+      pushCustomButtonsToSupabase({ showToast: true });
+    }
+
+    // ==================== 9. RECORD CRUD & TIMELINE ====================
+    function addRecord({ category, title, detail, leftMin = 0, rightMin = 0, formulaMl = 0, time }) {
+      const dateStr = state.selectedDate;
+      const timeStr = time || getNowTimeStr();
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const [hh, mm] = timeStr.split(':').map(Number);
+      const ts = new Date(y, m - 1, d, hh, mm, new Date().getSeconds()).getTime();
+
+      const rec = {
+        id: 'rec_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        date: dateStr,
+        time: timeStr,
+        timestamp: ts,
+        category,
+        title,
+        detail,
+        leftMin,
+        rightMin,
+        formulaMl,
+        recorder: getCurrentActorLabel()
+      };
+
+      state.records.unshift(rec);
+      state.records.sort((a, b) => b.timestamp - a.timestamp);
+      saveLocalData();
+      pushRecordToSupabase(rec);
+      renderTimelineAndSummary();
+      updateLastFeedBanner();
+
+      if (category === 'breast' || category === 'formula') {
+        state.settings.lastIntervalNotifiedAt = 0;
+        saveLocalData();
+      }
+
+      showIslandToast('✅', `已记录：${title}`);
+    }
+
+    function deleteRecord(id) {
+      state.records = state.records.filter(r => r.id !== id);
+      saveLocalData();
+      deleteRecordFromSupabase(id);
+      renderTimelineAndSummary();
+      updateLastFeedBanner();
+      showIslandToast('🗑️', '已删除该条记录');
+    }
+
+    function renderTimelineAndSummary() {
+      const dayRecords = state.records.filter(r => r.date === state.selectedDate);
+
+      let breastMin = 0;
+      let formulaMl = 0;
+      let peeCount = 0;
+      let poopCount = 0;
+
+      dayRecords.forEach(r => {
+        if (r.category === 'breast') breastMin += (r.leftMin || 0) + (r.rightMin || 0);
+        if (r.category === 'formula') formulaMl += (r.formulaMl || 0);
+        if (r.category === 'pee') peeCount++;
+        if (r.category === 'poop') poopCount++;
+      });
+
+      document.getElementById('sumBreastMin').textContent = breastMin;
+      document.getElementById('sumFormulaMl').textContent = formulaMl;
+      document.getElementById('sumPeeCount').textContent = peeCount;
+      document.getElementById('sumPoopCount').textContent = poopCount;
+      document.getElementById('summaryTotalCount').textContent = `共 ${dayRecords.length} 条记录`;
+
+      const listEl = document.getElementById('timelineList');
+      if (dayRecords.length === 0) {
+        listEl.innerHTML = `
+          <div class="text-center py-8 text-gray-400">
+            <div class="text-3xl mb-2">👶</div>
+            <div class="text-xs">这一天还没有记录哦，点击上方按钮开始记录吧</div>
+          </div>
+        `;
+        return;
+      }
+
+      const iconBgMap = {
+        breast: 'bg-rose-100 dark:bg-rose-950/60 text-rose-600',
+        formula: 'bg-blue-100 dark:bg-blue-950/60 text-blue-600',
+        pee: 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600',
+        poop: 'bg-amber-100 dark:bg-amber-950/60 text-amber-600',
+        diaper: 'bg-sky-100 dark:bg-sky-950/60 text-sky-600',
+        custom: 'bg-purple-100 dark:bg-purple-950/60 text-purple-600',
+      };
+      const iconCharMap = {
+        breast: '🤱',
+        formula: '🍼',
+        pee: '💧',
+        poop: '💩',
+        diaper: '🧻',
+        custom: '✨',
+      };
+
+      listEl.innerHTML = dayRecords.map(r => `
+        <div class="flex items-center justify-between bg-[#F2F2F7]/70 dark:bg-[#2C2C2E]/70 px-3.5 py-2.5 rounded-2xl">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-10 h-10 rounded-xl ${iconBgMap[r.category] || iconBgMap.custom} flex items-center justify-center text-lg shrink-0">
+              ${iconCharMap[r.category] || '✨'}
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="font-mono text-xs font-bold text-[#007AFF]">${r.time}</span>
+                <span class="text-sm font-bold truncate">${r.title}</span>
+              </div>
+              <div class="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                ${r.detail ? r.detail + ' · ' : ''}由 ${r.recorder} 记录
+              </div>
+            </div>
+          </div>
+          <button onclick="deleteRecord('${r.id}')" aria-label="删除" class="ios-press ml-2 w-7 h-7 rounded-full bg-white/80 dark:bg-black/30 text-gray-400 hover:text-rose-500 flex items-center justify-center text-xs shrink-0">
+            ✕
+          </button>
+        </div>
+      `).join('');
+    }
+
+    // ==================== 10. LAST FEED TIMER BANNER ====================
+    function updateLastFeedBanner() {
+      const feedRecords = state.records.filter(r => r.category === 'breast' || r.category === 'formula');
+      const badge = document.getElementById('lastFeedTypeBadge');
+      const elapsedEl = document.getElementById('timeSinceLastFeed');
+      const exactEl = document.getElementById('lastFeedExactTime');
+      const nextEl = document.getElementById('nextFeedTargetTime');
+
+      if (feedRecords.length === 0) {
+        badge.textContent = '暂无喂奶记录';
+        elapsedEl.textContent = '-- 小时 -- 分';
+        exactEl.textContent = '记录第一顿后自动开始计时';
+        nextEl.textContent = '--:--';
+        return;
+      }
+
+      const last = feedRecords[0];
+      const diffMs = Math.max(0, Date.now() - last.timestamp);
+      const totalMins = Math.floor(diffMs / 60000);
+      const hrs = Math.floor(totalMins / 60);
+      const mins = totalMins % 60;
+
+      badge.textContent = last.category === 'breast' ? '🤱 母乳' : `🍼 奶粉 ${last.formulaMl}ml`;
+      elapsedEl.textContent = `${hrs} 小时 ${mins} 分钟`;
+      exactEl.textContent = `上一顿时间：${last.date === getTodayStr() ? '今天' : last.date.slice(5)} ${last.time}`;
+
+      const nextTs = last.timestamp + state.settings.intervalHours * 3600 * 1000;
+      const nextDate = new Date(nextTs);
+      nextEl.textContent = `${String(nextDate.getHours()).padStart(2, '0')}:${String(nextDate.getMinutes()).padStart(2, '0')}`;
+    }
+
+    // ==================== 11. 7-DAY CHARTS (STATS TAB) ====================
+    function renderCharts() {
+      const labels = [];
+      const formulaSeries = [];
+      const breastSeries = [];
+      const peeSeries = [];
+      const poopSeries = [];
+
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        labels.push(`${d.getMonth() + 1}/${d.getDate()}`);
+
+        const recs = state.records.filter(r => r.date === dateStr);
+        let fSum = 0, bSum = 0, pCnt = 0, poCnt = 0;
+        recs.forEach(r => {
+          if (r.category === 'formula') fSum += (r.formulaMl || 0);
+          if (r.category === 'breast') bSum += (r.leftMin || 0) + (r.rightMin || 0);
+          if (r.category === 'pee') pCnt++;
+          if (r.category === 'poop') poCnt++;
+        });
+        formulaSeries.push(fSum);
+        breastSeries.push(bSum);
+        peeSeries.push(pCnt);
+        poopSeries.push(poCnt);
+      }
+
+      const avg = arr => Math.round((arr.reduce((a, b) => a + b, 0) / 7) * 10) / 10;
+      document.getElementById('avg7Formula').textContent = Math.round(avg(formulaSeries));
+      document.getElementById('avg7Breast').textContent = avg(breastSeries);
+      document.getElementById('avg7Pee').textContent = avg(peeSeries);
+      document.getElementById('avg7Poop').textContent = avg(poopSeries);
+
+      const isDark = document.documentElement.classList.contains('dark');
+      const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+      const textColor = isDark ? '#A1A1AA' : '#6E6E73';
+
+      if (state.charts.feeding) state.charts.feeding.destroy();
+      if (state.charts.excretion) state.charts.excretion.destroy();
+
+      const ctx1 = document.getElementById('feedingChart').getContext('2d');
+      state.charts.feeding = new Chart(ctx1, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: '奶粉 (ml)',
+              data: formulaSeries,
+              borderColor: '#007AFF',
+              backgroundColor: 'rgba(0, 122, 255, 0.14)',
+              fill: true,
+              tension: 0.4,
+              borderWidth: 2.5,
+              pointRadius: 3.5,
+              yAxisID: 'y'
+            },
+            {
+              label: '母乳 (分钟)',
+              data: breastSeries,
+              borderColor: '#FF2D55',
+              backgroundColor: 'rgba(255, 45, 85, 0.1)',
+              fill: false,
+              tension: 0.4,
+              borderWidth: 2.5,
+              pointRadius: 3.5,
+              yAxisID: 'y1'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { labels: { color: textColor, boxWidth: 10, font: { size: 11 } } }
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: textColor, font: { size: 11 } } },
+            y: {
+              type: 'linear',
+              position: 'left',
+              beginAtZero: true,
+              grid: { color: gridColor },
+              ticks: { color: '#007AFF', font: { size: 10 } }
+            },
+            y1: {
+              type: 'linear',
+              position: 'right',
+              beginAtZero: true,
+              grid: { drawOnChartArea: false },
+              ticks: { color: '#FF2D55', font: { size: 10 } }
+            }
+          }
+        }
+      });
+
+      const ctx2 = document.getElementById('excretionChart').getContext('2d');
+      state.charts.excretion = new Chart(ctx2, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: '💧 小便次数',
+              data: peeSeries,
+              borderColor: '#34C759',
+              backgroundColor: 'rgba(52, 199, 89, 0.15)',
+              fill: true,
+              tension: 0.38,
+              borderWidth: 2.5,
+              pointRadius: 4
+            },
+            {
+              label: '💩 大便次数',
+              data: poopSeries,
+              borderColor: '#FF9500',
+              backgroundColor: 'rgba(255, 149, 0, 0.15)',
+              fill: true,
+              tension: 0.38,
+              borderWidth: 2.5,
+              pointRadius: 4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { labels: { color: textColor, boxWidth: 10, font: { size: 11 } } }
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: textColor, font: { size: 11 } } },
+            y: {
+              beginAtZero: true,
+              ticks: { stepSize: 1, color: textColor, font: { size: 11 } },
+              grid: { color: gridColor }
+            }
+          }
+        }
+      });
+    }
+
+    // ==================== 12. REMINDERS & NOTIFICATIONS ====================
+    function requestNotificationPermission() {
+      if (!('Notification' in window)) {
+        return showIslandToast('⚠️', '当前浏览器不支持系统通知，请添加到主屏幕尝试');
+      }
+      Notification.requestPermission().then(perm => {
+        updateNotifPermissionUI();
+        if (perm === 'granted') {
+          showIslandToast('🔔', '手机通知权限已开启！');
+          sendPushNotification('团团宝宝喂养提醒', '通知权限已成功开启，到点会准时提醒爸爸妈妈哦~');
+        } else {
+          showIslandToast('⚠️', '通知权限未授予，请在手机设置中允许');
+        }
+      });
+    }
+
+    function updateNotifPermissionUI() {
+      const btn = document.getElementById('notifPermBtn');
+      const desc = document.getElementById('notifPermDesc');
+      if (!('Notification' in window)) {
+        btn.textContent = '不支持';
+        return;
+      }
+      if (Notification.permission === 'granted') {
+        btn.textContent = '已开启 ✓';
+        btn.className = 'shrink-0 px-3.5 py-2 rounded-full bg-[#34C759] text-white text-xs font-semibold';
+        desc.textContent = '系统推送已就绪，喂奶间隔与自定义闹钟将准时推送。';
+      } else if (Notification.permission === 'denied') {
+        btn.textContent = '已禁用';
+        btn.className = 'shrink-0 px-3.5 py-2 rounded-full bg-gray-400 text-white text-xs font-semibold';
+        desc.textContent = '您之前拒绝了通知，请前往 iPhone 设置 → 通知中开启。';
+      }
+    }
+
+    function setFeedIntervalHours(hrs) {
+      state.settings.intervalHours = hrs;
+      saveLocalData();
+      updateIntervalChips();
+      updateLastFeedBanner();
+      showIslandToast('⏱️', `喂奶提醒间隔已设为 ${hrs} 小时`);
+    }
+
+    function saveIntervalSetting() {
+      state.settings.intervalEnabled = document.getElementById('intervalReminderToggle').checked;
+      saveLocalData();
+      showIslandToast('🔔', state.settings.intervalEnabled ? '已开启喂奶间隔提醒' : '已关闭喂奶间隔提醒');
+    }
+
+    function updateIntervalChips() {
+      document.getElementById('intervalReminderToggle').checked = state.settings.intervalEnabled;
+      document.getElementById('currentIntervalLabel').textContent = `${state.settings.intervalHours} 小时`;
+      document.querySelectorAll('.interval-chip').forEach(btn => {
+        const val = Number(btn.dataset.interval);
+        if (val === state.settings.intervalHours) {
+          btn.className = 'interval-chip py-2 rounded-xl text-xs font-semibold bg-[#007AFF] text-white shadow-sm';
+        } else {
+          btn.className = 'interval-chip py-2 rounded-xl text-xs font-semibold bg-[#F2F2F7] dark:bg-[#2C2C2E]';
+        }
+      });
+    }
+
+    function renderAlarms() {
+      const list = document.getElementById('alarmList');
+      if (state.alarms.length === 0) {
+        list.innerHTML = `<div class="text-xs text-center text-gray-400 py-4">暂无自定义闹钟，点击右上角添加</div>`;
+        return;
+      }
+      list.innerHTML = state.alarms.map((al, idx) => `
+        <div class="flex items-center justify-between bg-[#F2F2F7] dark:bg-[#2C2C2E] px-3.5 py-3 rounded-2xl">
+          <div>
+            <div class="text-xl font-bold font-mono tracking-tight">${al.time}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400">${al.title}</div>
+          </div>
+          <div class="flex items-center gap-3">
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" ${al.enabled ? 'checked' : ''} onchange="toggleAlarm(${idx})" class="sr-only peer" />
+              <div class="w-11 h-6 bg-gray-300 dark:bg-gray-600 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#34C759]"></div>
+            </label>
+            <button onclick="deleteAlarm(${idx})" class="text-xs text-gray-400 hover:text-rose-500 px-1">✕</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function saveNewAlarm() {
+      const time = document.getElementById('alarmTimeInput').value;
+      const title = document.getElementById('alarmTitleInput').value.trim();
+      if (!time || !title) return showIslandToast('⚠️', '请填写提醒时间和内容');
+
+      state.alarms.push({
+        id: 'al_' + Date.now(),
+        time,
+        title,
+        enabled: true,
+        lastTriggeredDate: ''
+      });
+      document.getElementById('alarmTitleInput').value = '';
+      saveLocalData();
+      renderAlarms();
+      closeModal('addAlarmModal');
+      showIslandToast('⏰', `已添加 ${time} 提醒`);
+    }
+
+    function toggleAlarm(idx) {
+      state.alarms[idx].enabled = !state.alarms[idx].enabled;
+      saveLocalData();
+    }
+
+    function deleteAlarm(idx) {
+      state.alarms.splice(idx, 1);
+      saveLocalData();
+      renderAlarms();
+    }
+
+    function checkReminders() {
+      const now = new Date();
+      const todayStr = getTodayStr();
+      const nowHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      state.alarms.forEach(al => {
+        if (al.enabled && al.time === nowHHMM && al.lastTriggeredDate !== todayStr) {
+          al.lastTriggeredDate = todayStr;
+          saveLocalData();
+          sendPushNotification('团团宝宝定时提醒', `${al.time} · ${al.title}`);
+        }
+      });
+
+      if (state.settings.intervalEnabled) {
+        const feedRecords = state.records.filter(r => r.category === 'breast' || r.category === 'formula');
+        if (feedRecords.length > 0) {
+          const last = feedRecords[0];
+          const targetTs = last.timestamp + state.settings.intervalHours * 3600 * 1000;
+          if (Date.now() >= targetTs && state.settings.lastIntervalNotifiedAt !== last.timestamp) {
+            state.settings.lastIntervalNotifiedAt = last.timestamp;
+            saveLocalData();
+            sendPushNotification('🍼 团团该喂奶啦！', `距离上一顿已经过去 ${state.settings.intervalHours} 小时咯`);
+          }
+        }
+      }
+    }
+
+    function triggerTestNotification() {
+      sendPushNotification('🍼 团团宝宝喂养提醒（测试）', '叮咚~ 爸爸妈妈，到点给团团喂奶啦！');
+    }
+
+    function sendPushNotification(title, body) {
+      showIslandToast('🔔', `${title}：${body}`);
+      playGentleChime();
+      if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+          new Notification(title, { body });
+        } catch (e) {
+          console.warn('Notification error:', e);
+        }
+      }
+    }
+
+    function playGentleChime() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.6);
+      } catch (e) {}
+    }
+
+    // ==================== 13. FEEDING GUIDE TAB ====================
+    function selectAgeStage(idx) {
+      document.querySelectorAll('.age-tab').forEach((btn, i) => {
+        if (i === idx) {
+          btn.className = 'age-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#007AFF] text-white';
+        } else {
+          btn.className = 'age-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#F2F2F7] dark:bg-[#2C2C2E]';
+        }
+      });
+
+      const g = AGE_GUIDES[idx];
+      document.getElementById('ageStageContent').innerHTML = `
+        <div class="grid grid-cols-2 gap-2.5">
+          <div class="p-3 rounded-2xl bg-[#F2F2F7] dark:bg-[#2C2C2E]">
+            <div class="text-[11px] text-gray-500">🍼 单次参考奶量</div>
+            <div class="text-sm font-bold text-[#007AFF] mt-1">${g.singleFeed}</div>
+          </div>
+          <div class="p-3 rounded-2xl bg-[#F2F2F7] dark:bg-[#2C2C2E]">
+            <div class="text-[11px] text-gray-500">📊 全天总奶量</div>
+            <div class="text-sm font-bold text-[#FF2D55] mt-1">${g.dailyTotal}</div>
+          </div>
+        </div>
+        <div class="p-3 rounded-2xl bg-[#F2F2F7] dark:bg-[#2C2C2E] space-y-1.5 text-xs">
+          <div><strong>⏱️ 喂养频率：</strong>${g.frequency}</div>
+          <div><strong>💧 排泄参考：</strong>${g.excretion}</div>
+          <div class="pt-1 text-gray-600 dark:text-gray-300"><strong>💡 护理贴士：</strong>${g.tip}</div>
+        </div>
+      `;
+    }
+
+    // ==================== 14. BACKUP / RESTORE / EXPORT ====================
+    function exportJSON() {
+      const payload = {
+        app: '团团宝宝喂养记录',
+        exportedAt: new Date().toISOString(),
+        records: state.records,
+        growthLogs: state.growthLogs,
+        customButtons: getCustomButtonsOnly(),
+        quickButtons: state.quickButtons,
+        settings: { babyBirthday: state.settings.babyBirthday },
+        alarms: state.alarms
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      downloadBlob(blob, `团团喂养与生长备份_${getTodayStr()}.json`);
+      showIslandToast('💾', 'JSON 完整备份文件已导出');
+    }
+
+    function exportCSV() {
+      const headers = ['日期', '时间', '类型', '标题', '详情', '左乳(分)', '右乳(分)', '奶粉(ml)', '记录人'];
+      const rows = state.records.map(r => [
+        r.date, r.time, r.category, `"${r.title}"`, `"${r.detail || ''}"`, r.leftMin || 0, r.rightMin || 0, r.formulaMl || 0, `"${r.recorder}"`
+      ]);
+      const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      downloadBlob(blob, `团团喂养明细_${getTodayStr()}.csv`);
+      showIslandToast('📊', 'CSV 表格已导出');
+    }
+
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function importJSON(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (Array.isArray(parsed.records)) {
+            state.records = parsed.records;
+            if (Array.isArray(parsed.growthLogs)) state.growthLogs = parsed.growthLogs;
+            if (parsed.settings && parsed.settings.babyBirthday) state.settings.babyBirthday = parsed.settings.babyBirthday;
+            if (Array.isArray(parsed.quickButtons)) {
+              state.quickButtons = normalizeButtonsList(parsed.quickButtons);
+            } else if (Array.isArray(parsed.customButtons)) {
+              state.quickButtons = normalizeButtonsList([...DEFAULT_QUICK_BUTTONS, ...parsed.customButtons]);
+            }
+            if (Array.isArray(parsed.alarms)) state.alarms = parsed.alarms;
+            state.customButtonsUpdatedAt = Date.now();
+            state.customButtonsUpdatedBy = getCurrentActorLabel();
+            saveLocalData();
+            pushCustomButtonsToSupabase({ showToast: false });
+            renderQuickButtons();
+            renderTimelineAndSummary();
+            renderGrowthSummaryAndList();
+            renderAlarms();
+            updateLastFeedBanner();
+            closeModal('backupModal');
+            showIslandToast('🎉', `成功恢复 ${state.records.length} 条记录及自定义按钮！`);
+          } else {
+            showIslandToast('⚠️', '备份文件格式不正确');
+          }
+        } catch (err) {
+          showIslandToast('⚠️', '解析备份文件失败');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // ==================== 15. BABY HEIGHT & WEIGHT GROWTH MODULE ====================
+    function saveBabyBirthday(dateStr) {
+      state.settings.babyBirthday = dateStr;
+      saveLocalData();
+      renderGrowthSummaryAndList();
+      showIslandToast('🎂', '已更新宝宝出生日期');
+    }
+
+    function calcAgeLabel(targetDateStr) {
+      const bday = state.settings.babyBirthday;
+      if (!bday) return '';
+      const start = new Date(bday);
+      const end = new Date(targetDateStr || getTodayStr());
+      const diffDays = Math.floor((end - start) / (1000 * 3600 * 24));
+      if (diffDays < 0) return '未出生';
+      if (diffDays < 30) return `${diffDays}天`;
+      const months = Math.floor(diffDays / 30.4375);
+      const remDays = Math.floor(diffDays - months * 30.4375);
+      return remDays > 0 ? `${months}月${remDays}天` : `${months}个月`;
+    }
+
+    function calcAgeMonthsNumber(targetDateStr) {
+      const bday = state.settings.babyBirthday;
+      if (!bday) return null;
+      const diffDays = Math.floor((new Date(targetDateStr || getTodayStr()) - new Date(bday)) / (1000 * 3600 * 24));
+      return diffDays < 0 ? 0 : Math.min(12, Math.floor(diffDays / 30.4375));
+    }
+
+    function openGrowthModal(editId = null) {
+      document.getElementById('editingGrowthId').value = editId || '';
+      if (editId) {
+        const item = state.growthLogs.find(g => g.id === editId);
+        if (!item) return;
+        document.getElementById('growthModalTitle').textContent = '✏️ 编辑身高体重记录';
+        document.getElementById('growthDateInput').value = item.date;
+        document.getElementById('growthWeightInput').value = item.weightKg !== null ? item.weightKg : '';
+        document.getElementById('growthHeightInput').value = item.heightCm !== null ? item.heightCm : '';
+        document.getElementById('growthHeadInput').value = item.headCm !== null ? item.headCm : '';
+        document.getElementById('growthNoteInput').value = item.note || '';
+      } else {
+        document.getElementById('growthModalTitle').textContent = '📏 记录宝宝身高体重';
+        document.getElementById('growthDateInput').value = getTodayStr();
+        const latestW = state.growthLogs.find(g => g.weightKg !== null);
+        const latestH = state.growthLogs.find(g => g.heightCm !== null);
+        document.getElementById('growthWeightInput').value = latestW ? latestW.weightKg : '';
+        document.getElementById('growthHeightInput').value = latestH ? latestH.heightCm : '';
+        document.getElementById('growthHeadInput').value = '';
+        document.getElementById('growthNoteInput').value = '';
+      }
+      openModal('growthModal');
+    }
+
+    function stepGrowthInput(inputId, delta, decimals) {
+      const el = document.getElementById(inputId);
+      const current = parseFloat(el.value) || (inputId === 'growthWeightInput' ? 5.0 : 55.0);
+      const next = Math.max(0.1, current + delta);
+      el.value = next.toFixed(decimals);
+    }
+
+    function setGrowthNote(text) {
+      document.getElementById('growthNoteInput').value = text;
+    }
+
+    function saveGrowthRecord() {
+      const editId = document.getElementById('editingGrowthId').value;
+      const dateStr = document.getElementById('growthDateInput').value || getTodayStr();
+      const wRaw = document.getElementById('growthWeightInput').value.trim();
+      const hRaw = document.getElementById('growthHeightInput').value.trim();
+      const headRaw = document.getElementById('growthHeadInput').value.trim();
+      const note = document.getElementById('growthNoteInput').value.trim();
+
+      const weightKg = wRaw !== '' ? Math.round(parseFloat(wRaw) * 100) / 100 : null;
+      const heightCm = hRaw !== '' ? Math.round(parseFloat(hRaw) * 10) / 10 : null;
+      const headCm = headRaw !== '' ? Math.round(parseFloat(headRaw) * 10) / 10 : null;
+
+      if (weightKg === null && heightCm === null && headCm === null) {
+        return showIslandToast('⚠️', '请至少填写体重、身高或头围中的一项');
+      }
+
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const ts = new Date(y, m - 1, d, 12, 0, 0).getTime();
+
+      const entry = {
+        id: editId || ('gr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
+        date: dateStr,
+        timestamp: ts,
+        weightKg,
+        heightCm,
+        headCm,
+        note,
+        recorder: getCurrentActorLabel()
+      };
+
+      if (editId) {
+        const idx = state.growthLogs.findIndex(g => g.id === editId);
+        if (idx >= 0) state.growthLogs[idx] = entry;
+      } else {
+        state.growthLogs.unshift(entry);
+      }
+
+      state.growthLogs.sort((a, b) => b.timestamp - a.timestamp);
+      saveLocalData();
+      pushGrowthToSupabase(entry);
+      renderGrowthSummaryAndList();
+      if (!document.getElementById('statsGrowthSubView').classList.contains('hidden')) {
+        renderGrowthChart();
+      }
+      closeModal('growthModal');
+
+      const summaryParts = [];
+      if (weightKg !== null) summaryParts.push(`体重 ${weightKg}kg`);
+      if (heightCm !== null) summaryParts.push(`身高 ${heightCm}cm`);
+      showIslandToast('📏', `已保存生长记录：${summaryParts.join(' · ')}`);
+    }
+
+    function deleteGrowthRecord(id) {
+      state.growthLogs = state.growthLogs.filter(g => g.id !== id);
+      saveLocalData();
+      deleteGrowthFromSupabase(id);
+      renderGrowthSummaryAndList();
+      renderGrowthChart();
+      showIslandToast('🗑️', '已删除该条生长记录');
+    }
+
+    function renderGrowthSummaryAndList() {
+      const bdayInput = document.getElementById('babyBirthdayInput');
+      if (bdayInput && state.settings.babyBirthday) {
+        bdayInput.value = state.settings.babyBirthday;
+      }
+
+      const currentAgeStr = calcAgeLabel(getTodayStr());
+      const homeAgeBadge = document.getElementById('homeBabyAgeBadge');
+      const growthAgeTag = document.getElementById('growthAgeTag');
+      if (currentAgeStr) {
+        if (homeAgeBadge) homeAgeBadge.textContent = `团团 ${currentAgeStr}`;
+        if (growthAgeTag) growthAgeTag.textContent = `(${currentAgeStr})`;
+      }
+
+      const weights = state.growthLogs.filter(g => g.weightKg !== null);
+      const heights = state.growthLogs.filter(g => g.heightCm !== null);
+      const heads = state.growthLogs.filter(g => g.headCm !== null);
+
+      const latestW = weights[0] || null;
+      const prevW = weights[1] || null;
+      const latestH = heights[0] || null;
+      const prevH = heights[1] || null;
+      const latestHd = heads[0] || null;
+      const prevHd = heads[1] || null;
+
+      const homeText = document.getElementById('homeLatestGrowthText');
+      if (homeText) {
+        if (!latestW && !latestH) {
+          homeText.textContent = '暂未记录身高体重 · 点击上方“📏 身高体重”录入';
+        } else {
+          const parts = [];
+          if (latestW) parts.push(`体重 ${latestW.weightKg.toFixed(2)}kg`);
+          if (latestH) parts.push(`身高 ${latestH.heightCm.toFixed(1)}cm`);
+          const latestDate = (latestW || latestH).date.slice(5);
+          homeText.textContent = `最近(${latestDate})：${parts.join(' · ')}`;
+        }
+      }
+
+      document.getElementById('latestWeightVal').textContent = latestW ? latestW.weightKg.toFixed(2) : '--';
+      document.getElementById('latestHeightVal').textContent = latestH ? latestH.heightCm.toFixed(1) : '--';
+      document.getElementById('latestHeadVal').textContent = latestHd ? latestHd.headCm.toFixed(1) : '--';
+
+      const formatDiff = (curr, prev, unit, dec) => {
+        if (!curr || !prev) return '首次记录';
+        const d = curr - prev;
+        const sign = d >= 0 ? '+' : '';
+        return `较上次 ${sign}${d.toFixed(dec)} ${unit}`;
+      };
+
+      const wDiffEl = document.getElementById('latestWeightDiff');
+      wDiffEl.textContent = formatDiff(latestW?.weightKg, prevW?.weightKg, 'kg', 2);
+      wDiffEl.className = `text-[10px] font-semibold mt-0.5 ${latestW && prevW && latestW.weightKg >= prevW.weightKg ? 'text-[#007AFF]' : 'text-gray-400'}`;
+
+      const hDiffEl = document.getElementById('latestHeightDiff');
+      hDiffEl.textContent = formatDiff(latestH?.heightCm, prevH?.heightCm, 'cm', 1);
+      hDiffEl.className = `text-[10px] font-semibold mt-0.5 ${latestH && prevH && latestH.heightCm >= prevH.heightCm ? 'text-[#34C759]' : 'text-gray-400'}`;
+
+      const hdDiffEl = document.getElementById('latestHeadDiff');
+      hdDiffEl.textContent = latestHd ? formatDiff(latestHd?.headCm, prevHd?.headCm, 'cm', 1) : '可选指标';
+
+      const ageMonth = calcAgeMonthsNumber(getTodayStr());
+      const whoBanner = document.getElementById('whoRefBanner');
+      if (ageMonth !== null && WHO_GROWTH_REF[ageMonth]) {
+        const ref = WHO_GROWTH_REF[ageMonth];
+        whoBanner.innerHTML = `📊 <strong>${ageMonth} 月龄 WHO 参考标准区间：</strong>体重 <strong>${ref.weightRange}</strong> · 身高 <strong>${ref.heightRange}</strong>（个体发育有先后，平稳沿自身曲线增长即健康）`;
+      }
+
+      document.getElementById('growthTotalCount').textContent = `共 ${state.growthLogs.length} 次测量`;
+      const listEl = document.getElementById('growthRecordsList');
+      if (state.growthLogs.length === 0) {
+        listEl.innerHTML = `
+          <div class="text-center py-8 text-gray-400">
+            <div class="text-3xl mb-2">📏</div>
+            <div class="text-xs">还没有身高体重记录，点击上方绿色按钮记录第一次测量吧</div>
+          </div>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = state.growthLogs.map((item, idx) => {
+        const nextOlder = state.growthLogs[idx + 1];
+        const ageAtMeasure = calcAgeLabel(item.date);
+        let deltaTags = '';
+        if (nextOlder) {
+          if (item.weightKg !== null && nextOlder.weightKg !== null) {
+            const dw = item.weightKg - nextOlder.weightKg;
+            deltaTags += `<span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-[#007AFF] font-semibold">${dw >= 0 ? '+' : ''}${dw.toFixed(2)}kg</span>`;
+          }
+          if (item.heightCm !== null && nextOlder.heightCm !== null) {
+            const dh = item.heightCm - nextOlder.heightCm;
+            deltaTags += `<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-[#34C759] font-semibold">${dh >= 0 ? '+' : ''}${dh.toFixed(1)}cm</span>`;
+          }
+        }
+
+        return `
+          <div class="bg-[#F2F2F7]/75 dark:bg-[#2C2C2E]/75 rounded-2xl p-3.5 flex items-center justify-between gap-2">
+            <div class="min-w-0 space-y-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="font-mono text-xs font-bold text-[#007AFF]">${item.date}</span>
+                ${ageAtMeasure ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-700 dark:text-teal-300 font-semibold">${ageAtMeasure}</span>` : ''}
+                ${item.note ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 font-medium">${item.note}</span>` : ''}
+              </div>
+              <div class="flex items-center gap-3 text-sm font-bold flex-wrap">
+                ${item.weightKg !== null ? `<span class="text-[#007AFF]">⚖️ ${item.weightKg.toFixed(2)} kg</span>` : ''}
+                ${item.heightCm !== null ? `<span class="text-[#34C759]">📐 ${item.heightCm.toFixed(1)} cm</span>` : ''}
+                ${item.headCm !== null ? `<span class="text-[#AF52DE]">🧢 ${item.headCm.toFixed(1)} cm</span>` : ''}
+              </div>
+              <div class="flex items-center gap-1.5 flex-wrap text-[11px] text-gray-400">
+                ${deltaTags}
+                <span>由 ${item.recorder} 记录</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button onclick="openGrowthModal('${item.id}')" class="ios-press w-8 h-8 rounded-full bg-white dark:bg-black/30 text-[#007AFF] text-xs flex items-center justify-center">✏️</button>
+              <button onclick="deleteGrowthRecord('${item.id}')" class="ios-press w-8 h-8 rounded-full bg-white dark:bg-black/30 text-gray-400 hover:text-rose-500 text-xs flex items-center justify-center">✕</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function setStatsSubTab(sub) {
+      state.statsSubTab = sub;
+      const fBtn = document.getElementById('statsSubFeedBtn');
+      const gBtn = document.getElementById('statsSubGrowthBtn');
+      const fView = document.getElementById('statsFeedingSubView');
+      const gView = document.getElementById('statsGrowthSubView');
+
+      if (sub === 'feeding') {
+        fBtn.className = 'py-2 rounded-xl text-xs font-bold bg-[#007AFF] text-white shadow-sm transition';
+        gBtn.className = 'py-2 rounded-xl text-xs font-bold text-gray-500 dark:text-gray-400 transition';
+        fView.classList.remove('hidden');
+        gView.classList.add('hidden');
+        renderCharts();
+      } else {
+        gBtn.className = 'py-2 rounded-xl text-xs font-bold bg-[#34C759] text-white shadow-sm transition';
+        fBtn.className = 'py-2 rounded-xl text-xs font-bold text-gray-500 dark:text-gray-400 transition';
+        gView.classList.remove('hidden');
+        fView.classList.add('hidden');
+        renderGrowthSummaryAndList();
+        renderGrowthChart();
+      }
+    }
+
+    function setGrowthChartMetric(metric) {
+      state.growthChartMetric = metric;
+      const map = {
+        both: 'gMetricBoth',
+        weight: 'gMetricWeight',
+        height: 'gMetricHeight',
+        head: 'gMetricHead'
+      };
+      Object.entries(map).forEach(([k, id]) => {
+        const btn = document.getElementById(id);
+        if (k === metric) {
+          btn.className = 'px-2.5 py-1 rounded-lg bg-white dark:bg-[#3A3A3C] shadow-sm font-bold';
+        } else {
+          btn.className = 'px-2.5 py-1 rounded-lg text-gray-500';
+        }
+      });
+      renderGrowthChart();
+    }
+
+    function renderGrowthChart() {
+      const canvas = document.getElementById('growthCurveChart');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (state.charts.growth) state.charts.growth.destroy();
+
+      const rangeVal = document.getElementById('growthRangeSelect')?.value || 'all';
+      let logs = [...state.growthLogs].sort((a, b) => a.timestamp - b.timestamp);
+
+      if (rangeVal !== 'all') {
+        const cutoff = Date.now() - Number(rangeVal) * 24 * 3600 * 1000;
+        logs = logs.filter(g => g.timestamp >= cutoff);
+      }
+
+      const labels = logs.map(g => g.date.slice(5));
+      const weightData = logs.map(g => g.weightKg);
+      const heightData = logs.map(g => g.heightCm);
+      const headData = logs.map(g => g.headCm);
+
+      const whoWeightMed = logs.map(g => {
+        const m = calcAgeMonthsNumber(g.date);
+        return m !== null && WHO_GROWTH_REF[m] ? WHO_GROWTH_REF[m].wMed : null;
+      });
+      const whoHeightMed = logs.map(g => {
+        const m = calcAgeMonthsNumber(g.date);
+        return m !== null && WHO_GROWTH_REF[m] ? WHO_GROWTH_REF[m].hMed : null;
+      });
+
+      const isDark = document.documentElement.classList.contains('dark');
+      const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+      const textColor = isDark ? '#A1A1AA' : '#6E6E73';
+
+      const metric = state.growthChartMetric;
+      const datasets = [];
+
+      if (metric === 'both' || metric === 'weight') {
+        datasets.push({
+          label: '⚖️ 体重 (kg)',
+          data: weightData,
+          borderColor: '#007AFF',
+          backgroundColor: 'rgba(0, 122, 255, 0.14)',
+          fill: metric === 'weight',
+          tension: 0.35,
+          borderWidth: 3,
+          pointRadius: 4.5,
+          spanGaps: true,
+          yAxisID: 'y'
+        });
+        if (metric === 'weight' && whoWeightMed.some(v => v !== null)) {
+          datasets.push({
+            label: 'WHO同月龄参考中位(kg)',
+            data: whoWeightMed,
+            borderColor: 'rgba(0, 122, 255, 0.45)',
+            borderDash: [5, 5],
+            tension: 0.35,
+            borderWidth: 1.5,
+            pointRadius: 0,
+            yAxisID: 'y'
+          });
+        }
+      }
+
+      if (metric === 'both' || metric === 'height') {
+        datasets.push({
+          label: '📐 身高 (cm)',
+          data: heightData,
+          borderColor: '#34C759',
+          backgroundColor: 'rgba(52, 199, 89, 0.14)',
+          fill: metric === 'height',
+          tension: 0.35,
+          borderWidth: 3,
+          pointRadius: 4.5,
+          spanGaps: true,
+          yAxisID: metric === 'both' ? 'y1' : 'y'
+        });
+        if (metric === 'height' && whoHeightMed.some(v => v !== null)) {
+          datasets.push({
+            label: 'WHO同月龄参考中位(cm)',
+            data: whoHeightMed,
+            borderColor: 'rgba(52, 199, 89, 0.45)',
+            borderDash: [5, 5],
+            tension: 0.35,
+            borderWidth: 1.5,
+            pointRadius: 0,
+            yAxisID: 'y'
+          });
+        }
+      }
+
+      if (metric === 'head') {
+        datasets.push({
+          label: '🧢 头围 (cm)',
+          data: headData,
+          borderColor: '#AF52DE',
+          backgroundColor: 'rgba(175, 82, 222, 0.15)',
+          fill: true,
+          tension: 0.35,
+          borderWidth: 3,
+          pointRadius: 4.5,
+          spanGaps: true,
+          yAxisID: 'y'
+        });
+      }
+
+      const scales = {
+        x: { grid: { display: false }, ticks: { color: textColor, font: { size: 11 } } },
+        y: {
+          type: 'linear',
+          position: 'left',
+          grid: { color: gridColor },
+          ticks: {
+            color: metric === 'height' ? '#34C759' : (metric === 'head' ? '#AF52DE' : '#007AFF'),
+            font: { size: 11 }
+          }
+        }
+      };
+
+      if (metric === 'both') {
+        scales.y1 = {
+          type: 'linear',
+          position: 'right',
+          grid: { drawOnChartArea: false },
+          ticks: { color: '#34C759', font: { size: 11 } }
+        };
+      }
+
+      state.charts.growth = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { labels: { color: textColor, boxWidth: 10, font: { size: 11 } } },
+            tooltip: {
+              callbacks: {
+                afterBody: (items) => {
+                  const idx = items[0]?.dataIndex;
+                  const log = logs[idx];
+                  if (!log) return '';
+                  const extras = [];
+                  if (log.note) extras.push(`备注：${log.note}`);
+                  extras.push(`记录人：${log.recorder}`);
+                  return extras;
+                }
+              }
+            }
+          },
+          scales
+        }
+      });
+    }
+
+    // ==================== 16. TAB & MODAL HELPERS ====================
+    function switchTab(tabName, subTab = null) {
+      ['record', 'stats', 'reminder', 'guide'].forEach(t => {
+        document.getElementById(`tab-${t}`).classList.toggle('hidden', t !== tabName);
+        const navBtn = document.getElementById(`nav-${t}`);
+        if (t === tabName) {
+          navBtn.classList.remove('text-gray-400');
+          navBtn.classList.add('text-[#007AFF]');
+        } else {
+          navBtn.classList.add('text-gray-400');
+          navBtn.classList.remove('text-[#007AFF]');
+        }
+      });
+
+      document.getElementById('dateNavCapsule').classList.toggle('hidden', tabName !== 'record');
+
+      if (tabName === 'stats') {
+        if (subTab) {
+          setStatsSubTab(subTab);
+        } else if (state.statsSubTab === 'growth') {
+          renderGrowthSummaryAndList();
+          renderGrowthChart();
+        } else {
+          renderCharts();
+        }
+      }
+    }
+
+    function openModal(id) {
+      document.getElementById(id).classList.remove('hidden');
+      if (id === 'editButtonsModal' || id === 'syncModal') {
+        updateButtonSyncMetaUI();
+      }
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    let toastTimeout = null;
+    function showIslandToast(icon, text) {
+      const toast = document.getElementById('islandToast');
+      document.getElementById('islandIcon').textContent = icon;
+      document.getElementById('islandText').textContent = text;
+      toast.classList.remove('hidden');
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.add('hidden');
+      }, 2800);
+    }
+  </script>
+</body>
+</html>
